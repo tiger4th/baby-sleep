@@ -1550,7 +1550,7 @@ function updateTimelineChart() {
 
   for (let i = 0; i < rangeDays; i++) {
     const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() + i);
+    dt.setDate(dt.getDate() - (rangeDays - 1 - i)); // 6日前から今日まで
     const dayLabel = rangeDays === 1 ? 'スケジュール' : labelForDate(dt);
     if (rangeDays > 1) dayLabels.push(dayLabel);
 
