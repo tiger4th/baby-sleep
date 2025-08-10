@@ -30,12 +30,12 @@
   --radius-lg: 0.75rem;
   
   /* 予測・チャート用の改善された色 */
-  --prediction-bg: #fef7ed;
-  --prediction-border: #fbbf24;
-  --prediction-text: #92400e;
-  --prediction-text-secondary: #a16207;
-  --chart-awake: #dc2626;
-  --chart-sleep: #2563eb;
+  --prediction-bg: #f0f9ff;
+  --prediction-border: #0ea5e9;
+  --prediction-text: #0c4a6e;
+  --prediction-text-secondary: #0369a1;
+  --chart-awake: #ef4444;
+  --chart-sleep: #3b82f6;
   --chart-bg: #ffffff;
   --chart-border: #e2e8f0;
 }
@@ -57,12 +57,30 @@ body {
 
 /* ヘッダー */
 .app-header {
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 50%, var(--accent-color) 100%);
   color: white;
   padding: 2rem 1rem;
   text-align: center;
   margin-bottom: 2rem;
   box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.app-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
 }
 
 .app-header h1 {
@@ -70,12 +88,16 @@ body {
   font-size: 2rem;
   font-weight: 700;
   text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 1;
 }
 
 .app-header .subtitle {
   margin-top: 0.5rem;
   opacity: 0.9;
   font-size: 1.1rem;
+  position: relative;
+  z-index: 1;
 }
 
 /* メインコンテナ */
@@ -98,7 +120,8 @@ body {
 
 .card:hover {
   box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: var(--primary-color);
 }
 
 .card-header {
@@ -146,8 +169,9 @@ body {
 
 .btn-primary:hover {
   background: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-hover);
 }
 
 .btn-secondary {
@@ -157,8 +181,9 @@ body {
 
 .btn-secondary:hover {
   background: var(--secondary-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--secondary-hover);
 }
 
 .btn-accent {
@@ -168,8 +193,9 @@ body {
 
 .btn-accent:hover {
   background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--accent-hover);
 }
 
 .btn-danger {
@@ -179,8 +205,9 @@ body {
 
 .btn-danger:hover {
   background: var(--danger-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--danger-hover);
 }
 
 .btn-outline {
@@ -226,7 +253,9 @@ body {
 .form-control:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
 }
 
 .form-control:disabled {
@@ -298,19 +327,29 @@ select.form-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
   background: var(--card-background);
   border-radius: var(--radius-md);
   border-left: 4px solid var(--primary-color);
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-color);
+}
+
+.log-item:hover {
+  transform: translateX(3px);
+  box-shadow: var(--shadow-md);
+  border-left-width: 6px;
 }
 
 .log-item.wake {
   border-left-color: var(--accent-color);
+  background: linear-gradient(135deg, var(--card-background), rgba(245, 158, 11, 0.05));
 }
 
 .log-item.nap {
   border-left-color: var(--secondary-color);
+  background: linear-gradient(135deg, var(--card-background), rgba(16, 185, 129, 0.05));
 }
 
 .log-time {
@@ -334,31 +373,74 @@ select.form-control {
   background: var(--prediction-bg);
   border: 2px solid var(--prediction-border);
   color: var(--prediction-text);
+  box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.1), 0 2px 4px -2px rgba(14, 165, 233, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.prediction-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--prediction-border), var(--primary-color));
 }
 
 .prediction-time {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 900;
   color: var(--prediction-text);
   text-align: center;
-  margin: 1rem 0;
+  margin: 1.5rem 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.1em;
+  background: linear-gradient(135deg, var(--prediction-text), var(--prediction-text-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .prediction-label {
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--prediction-text-secondary);
   text-align: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.9;
 }
 
 .prediction-item {
   text-align: center;
-  padding: 1rem;
+  padding: 1.5rem;
+  position: relative;
+  transition: all 0.3s ease;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.prediction-item:hover {
+  background: rgba(14, 165, 233, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(14, 165, 233, 0.2);
 }
 
 .prediction-item:not(:last-child) {
   border-right: 1px solid var(--prediction-border);
+}
+
+.prediction-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--prediction-border), transparent);
 }
 
 /* チャート */
@@ -381,16 +463,40 @@ select.form-control {
 
 .stat-item {
   text-align: center;
-  padding: 1rem;
+  padding: 1.5rem;
   background: var(--card-background);
   border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-value {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 800;
   color: var(--primary-color);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .stat-label {
@@ -454,8 +560,17 @@ select.form-control {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .fade-in {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
 }
 
 /* スクロールバーのカスタマイズ */
@@ -534,12 +649,12 @@ select.form-control {
   --border-color: #334155 !important;
   
   /* 予測・チャート用の色 */
-  --prediction-bg: #451a03 !important;
-  --prediction-border: #f59e0b !important;
-  --prediction-text: #fef3c7 !important;
-  --prediction-text-secondary: #fde68a !important;
-  --chart-awake: #f87171 !important;
-  --chart-sleep: #60a5fa !important;
+  --prediction-bg: #0c4a6e !important;
+  --prediction-border: #38bdf8 !important;
+  --prediction-text: #e0f2fe !important;
+  --prediction-text-secondary: #bae6fd !important;
+  --chart-awake: #fca5a5 !important;
+  --chart-sleep: #93c5fd !important;
   --chart-bg: #1e293b !important;
   --chart-border: #334155 !important;
   
@@ -637,6 +752,23 @@ details > div {
   color: var(--text-secondary);
 }
 
+/* ダークモード時の予測カードの改善 */
+.dark-mode .prediction-card {
+  box-shadow: 0 4px 6px -1px rgba(56, 189, 248, 0.2), 0 2px 4px -2px rgba(56, 189, 248, 0.2);
+}
+
+.dark-mode .prediction-card::before {
+  background: linear-gradient(90deg, var(--prediction-border), #60a5fa);
+}
+
+.dark-mode .prediction-item:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.dark-mode .prediction-item:not(:last-child)::after {
+  background: linear-gradient(to bottom, transparent, var(--prediction-border), transparent);
+}
+
 /* ダークモード時の予測統計の背景 */
 .dark-mode .card .card {
   background: var(--card-background);
@@ -720,11 +852,11 @@ details > div {
 <body>
 
 <div class="app-header">
-  <h1>🌙 ベビースリープ予測</h1>
-  <div class="subtitle">赤ちゃんの睡眠パターンを記録・予測</div>
-  <button id="darkModeToggle" class="btn btn-outline" style="position: absolute; top: 1rem; right: 1rem;">
+  <button id="darkModeToggle" class="btn btn-outline" style="position: absolute; top: 1rem; right: 1rem; background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.3); color: white; backdrop-filter: blur(10px); z-index: 1000;">
     🌙
   </button>
+  <h1>🌙 ベビースリープ予測</h1>
+  <div class="subtitle">赤ちゃんの睡眠パターンを記録・予測</div>
 </div>
   
 <div class="container">
@@ -1133,7 +1265,7 @@ function createLogItemHtml(log, index) {
   const typeText = translateType(log.type);
   
   return `
-    <div class="log-item ${typeClass} fade-in">
+    <div class="log-item ${typeClass} slide-in">
       <div>
         <div class="log-time">${log.time}</div>
         <div class="log-type">${typeIcon} ${typeText}</div>
@@ -1453,7 +1585,7 @@ function updateTimelineChart() {
       labels: dayLabels,
       datasets: [
         {
-          label: '起床中',
+          label: '覚醒中',
           data: awakeData,
           backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--chart-awake').trim(),
           borderSkipped: false,
@@ -1686,7 +1818,7 @@ function analyzeDayPattern(dayLogs, dateKey) {
     const next = sortedLogs[i + 1];
     
     if (current.type === 'wake' && next.type === 'nap') {
-      // 起床→睡眠のパターン
+      // 覚醒→睡眠のパターン
       const [wakeHour, wakeMin] = current.time.split(':').map(Number);
       const [napHour, napMin] = next.time.split(':').map(Number);
       
@@ -1694,7 +1826,7 @@ function analyzeDayPattern(dayLogs, dateKey) {
       let awakeTime = (napHour * 60 + napMin) - (wakeHour * 60 + wakeMin);
       if (awakeTime < 0) awakeTime += 24 * 60; // 日をまたぐ場合
       
-      // 睡眠時間を計算（次の起床まで）
+      // 睡眠時間を計算（次の覚醒まで）
       let napLength = 0;
       if (i + 2 < sortedLogs.length && sortedLogs[i + 2].type === 'wake') {
         const nextWake = sortedLogs[i + 2];
@@ -1702,7 +1834,7 @@ function analyzeDayPattern(dayLogs, dateKey) {
         napLength = (nextWakeHour * 60 + nextWakeMin) - (napHour * 60 + napMin);
         if (napLength < 0) napLength += 24 * 60;
       } else {
-        // 次の起床がない場合は推定
+        // 次の覚醒がない場合は推定
         napLength = getNapLengthByMonths(null, new Date());
       }
 
