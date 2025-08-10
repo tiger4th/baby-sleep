@@ -227,11 +227,6 @@ body {
   min-height: 36px;
 }
 
-/* フォーム要素 */
-.form-group {
-  margin-bottom: 1rem;
-}
-
 .form-label {
   display: block;
   margin-bottom: 0.5rem;
@@ -393,7 +388,6 @@ select.form-control {
   font-weight: 900;
   color: var(--prediction-text);
   text-align: center;
-  margin: 1.5rem 0;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   letter-spacing: 0.1em;
   background: linear-gradient(135deg, var(--prediction-text), var(--prediction-text-secondary));
@@ -415,22 +409,19 @@ select.form-control {
 
 .prediction-item {
   text-align: center;
-  padding: 1.5rem;
+  padding: 1rem;
   position: relative;
   transition: all 0.3s ease;
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
+  border: 1px solid var(--prediction-border);
 }
 
 .prediction-item:hover {
   background: rgba(14, 165, 233, 0.15);
   transform: translateY(-3px);
   box-shadow: 0 8px 25px rgba(14, 165, 233, 0.2);
-}
-
-.prediction-item:not(:last-child) {
-  border-right: 1px solid var(--prediction-border);
 }
 
 .prediction-item:not(:last-child)::after {
@@ -599,15 +590,14 @@ select.form-control {
 
 /* ダークモード切り替えボタン */
 #darkModeToggle {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.3);
   color: white;
   backdrop-filter: blur(10px);
   transition: all 0.2s ease;
   z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-bottom: 20px;
 }
 
 #darkModeToggle:hover {
@@ -852,9 +842,6 @@ details > div {
 <body>
 
 <div class="app-header">
-  <button id="darkModeToggle" class="btn btn-outline" style="position: absolute; top: 1rem; right: 1rem; background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.3); color: white; backdrop-filter: blur(10px); z-index: 1000;">
-    🌙
-  </button>
   <h1>🌙 ベビースリープ予測</h1>
   <div class="subtitle">赤ちゃんの睡眠パターンを記録・予測</div>
 </div>
@@ -877,6 +864,16 @@ details > div {
       </button>
     </div>
   </div>
+
+    <!-- 予測表示 -->
+    <div class="card prediction-card">
+      <div class="card-header">
+        <span class="icon">🔮</span>
+        <h3>次の寝かしつけ予測</h3>
+      </div>
+  <div id="prediction"></div>
+    </div>
+  
   
   <!-- 時間指定で追加・編集 -->
   <div class="card">
@@ -897,7 +894,6 @@ details > div {
         <input id="timeInput" type="time" step="60" class="form-control">
       </div>
       <div class="form-group">
-        <label class="form-label">&nbsp;</label>
         <div class="btn-group">
           <button id="addBtn" class="btn btn-primary" onclick="handleAddOrUpdate()">追加</button>
           <button id="cancelEditBtn" class="btn btn-outline" onclick="cancelEdit()" style="display:none;">キャンセル</button>
@@ -907,23 +903,16 @@ details > div {
     <div id="editStatus" class="status status-info" style="display:none;"></div>
   </div>
 
-  <!-- 生年月日設定 -->
+  <!-- 記録表示 -->
   <div class="card">
     <div class="card-header">
-      <span class="icon">🎂</span>
-      <h3>生年月日</h3>
+      <span class="icon">📝</span>
+      <h3>記録</h3>
     </div>
-    <div class="grid grid-cols-2">
-      <div class="form-group">
-        <input id="birthInput" type="date" class="form-control">
-      </div>
-      <div class="form-group">
-        <button class="btn btn-secondary" onclick="saveBirth()">保存</button>
-      </div>
-    </div>
-    <div id="birthStatus" class="status status-info"></div>
+<div id="log"></div>
   </div>
 
+  
   <!-- 表示日設定 -->
   <div class="card">
     <div class="card-header">
@@ -936,33 +925,11 @@ details > div {
       </div>
       <div class="form-group">
         <button class="btn btn-accent" onclick="goToday()">今日</button>
-      </div>
-      <div class="form-group">
         <button class="btn btn-outline" onclick="shiftDay(-1)">前日</button>
-      </div>
-      <div class="form-group">
         <button class="btn btn-outline" onclick="shiftDay(1)">翌日</button>
       </div>
     </div>
     <div id="viewDateStatus" class="status status-info"></div>
-  </div>
-
-  <!-- 記録表示 -->
-  <div class="card">
-    <div class="card-header">
-      <span class="icon">📝</span>
-      <h3>記録</h3>
-    </div>
-<div id="log"></div>
-  </div>
-
-  <!-- 予測表示 -->
-  <div class="card prediction-card">
-    <div class="card-header">
-      <span class="icon">🔮</span>
-      <h3>次の寝かしつけ予測</h3>
-    </div>
-<div id="prediction"></div>
   </div>
 
   <!-- タイムラインチャート -->
@@ -973,6 +940,25 @@ details > div {
     </div>
 <canvas id="timelineChart" height="150"></canvas>
   </div>
+
+    <!-- 生年月日設定 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">🎂</span>
+        <h3>生年月日</h3>
+      </div>
+      <div class="grid grid-cols-2">
+        <div class="form-group">
+          <input id="birthInput" type="date" class="form-control">
+        </div>
+        <div class="form-group">
+          <button class="btn btn-secondary" onclick="saveBirth()">保存</button>
+        </div>
+      </div>
+      <br>
+      <div id="birthStatus" class="status status-info"></div>
+    </div>
+  
 
   <!-- ぴよログインポート -->
   <div class="card">
@@ -1006,6 +992,10 @@ details > div {
     </button>
     <div id="analysisStatus" class="status status-info" style="margin-top:0.5rem;"></div>
   </div>
+
+  <button id="darkModeToggle" class="btn btn-outline" style="background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.3); color: white; backdrop-filter: blur(10px); z-index: 1000;">
+    🌙
+  </button>
 </div>
 
 <script>
@@ -1462,9 +1452,9 @@ function updatePrediction() {
   const nextNapStart = new Date(wakeTime.getTime() + finalAwakeMinutes * 60000);
   const wakeUpTime = new Date(nextNapStart.getTime() + finalNapLengthMinutes * 60000);
 
-  const monthsInfo = monthsAge !== null ? `（月齢: ${monthsAge}ヶ月）` : "";
+  const monthsInfo = monthsAge !== null ? `月齢: ${monthsAge}ヶ月` : "";
   const historicalInfo = historicalPrediction ? 
-    `<br><small style="color:#666;">過去データベース: 覚醒時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
+    `<small style="color:#666;">過去データベース: 覚醒時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
 
   document.getElementById("prediction").innerHTML = `
     <div class="grid grid-cols-3">
@@ -1997,11 +1987,11 @@ function analyzePatternTrend(awakeTimes, napLengths) {
   // 睡眠時間の一貫性
   const napStd = calculateStandardDeviation(napLengths, napLengths.reduce((sum, val) => sum + val, 0) / napLengths.length);
   if (napStd < 30) {
-    trend += '、睡眠時間は一貫しています';
+    trend += '<br>睡眠時間は一貫しています';
   } else if (napStd > 60) {
-    trend += '、睡眠時間にばらつきがあります';
+    trend += '<br>睡眠時間にばらつきがあります';
   } else {
-    trend += '、睡眠時間はややばらつきがあります';
+    trend += '<br>睡眠時間はややばらつきがあります';
   }
 
   return trend;
