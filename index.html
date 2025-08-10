@@ -139,11 +139,44 @@ function deleteLog(index) {
 }
 
 function renderLogs() {
-  document.getElementById("log").innerHTML =
-    "<b>記録</b><br>" + logs.map((l, i) => `${l.time} - ${translateType(l.type)} ` +
+  const container = document.getElementById("log");
+  const total = logs.length;
+  const recentCount = 3;
+  const header = "<b>記録</b><br>";
+
+  if (total <= recentCount) {
+    const allHtml = logs.map((l, i) => `${l.time} - ${translateType(l.type)} ` +
       `<button onclick="startEditLog(${i})">編集</button> ` +
-      `<button onclick="deleteLog(${i})">削除</button>`
-    ).join("<br>");
+      `<button onclick="deleteLog(${i})">削除</button>`).join("<br>");
+    container.innerHTML = header + allHtml;
+    return;
+  }
+
+  const olderCount = total - recentCount;
+  const recentBaseIndex = total - recentCount;
+
+  const olderHtml = logs.slice(0, olderCount).map((l, i) => {
+    const idx = i; // 先頭からのインデックスはそのまま
+    return `${l.time} - ${translateType(l.type)} ` +
+      `<button onclick="startEditLog(${idx})">編集</button> ` +
+      `<button onclick="deleteLog(${idx})">削除</button>`;
+  }).join("<br>");
+
+  const recentHtml = logs.slice(recentBaseIndex).map((l, i) => {
+    const idx = recentBaseIndex + i; // 元配列でのインデックス
+    return `${l.time} - ${translateType(l.type)} ` +
+      `<button onclick="startEditLog(${idx})">編集</button> ` +
+      `<button onclick="deleteLog(${idx})">削除</button>`;
+  }).join("<br>");
+
+  const detailsHtml =
+    `<details>` +
+      `<summary>過去の記録を表示（${olderCount}件）</summary>` +
+      `${olderHtml ? `<div style="margin-top:8px;">${olderHtml}</div>` : ""}` +
+    `</details>`;
+
+  // 昇順の表示順を維持するため、先に折りたたみ、その後に直近3件を表示
+  container.innerHTML = header + detailsHtml + "<br>" + recentHtml;
 }
 
 function translateType(type) {
