@@ -37,6 +37,13 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
     <span id="editStatus" style="margin-left:8px;color:#666;"></span>
   </div>
 
+  <div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
+    <b>生年月日</b><br>
+    <input id="birthInput" type="date">
+    <button onclick="saveBirth()">保存</button>
+    <span id="birthStatus" style="margin-left:8px;color:#666;"></span>
+  </div>
+
 <div id="log"></div>
 <div id="prediction"></div>
 <canvas id="timelineChart" height="150"></canvas>
@@ -45,6 +52,7 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
 let logs = JSON.parse(localStorage.getItem("babyLogs") || "[]");
 let timelineChart = null;
 let editingIndex = null;
+const BIRTH_KEY = "babyBirthDate"; // YYYY-MM-DD で保存
 
 function nowTimeString() {
   const now = new Date();
@@ -185,6 +193,103 @@ function translateType(type) {
          type === "milk" ? "ミルク" : type;
 }
 
+// 生年月日の保存・読込と月齢ベースの推定
+function saveBirth(showSavedMessage = true) {
+  const input = document.getElementById('birthInput');
+  const status = document.getElementById('birthStatus');
+  if (!input || !status) return;
+  const value = input.value; // YYYY-MM-DD or ''
+  if (!value) {
+    localStorage.removeItem(BIRTH_KEY);
+    status.textContent = '未設定';
+    updatePrediction();
+    return;
+  }
+  // 簡易バリデーション
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    status.textContent = '日付形式が不正です (YYYY-MM-DD)';
+    return;
+  }
+  localStorage.setItem(BIRTH_KEY, value);
+  const birth = loadBirth();
+  const months = birth ? calculateMonthsAge(birth) : null;
+  status.textContent = months !== null ? `保存しました（月齢: ${months}ヶ月）` : '保存しました';
+  if (!showSavedMessage) {
+    // 即時保存時は控えめな表示
+    status.textContent = months !== null ? `保存済み（月齢: ${months}ヶ月）` : '保存済み';
+  }
+  updatePrediction();
+}
+
+function loadBirth() {
+  const stored = localStorage.getItem(BIRTH_KEY);
+  if (!stored) return null;
+  // Local 00:00 に設定
+  const [y, m, d] = stored.split('-').map(Number);
+  const dt = new Date();
+  dt.setHours(0, 0, 0, 0);
+  dt.setFullYear(y, m - 1, d);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function calculateMonthsAge(birthDate, refDate = new Date()) {
+  if (!birthDate) return null;
+  const y1 = birthDate.getFullYear();
+  const m1 = birthDate.getMonth();
+  const d1 = birthDate.getDate();
+  const y2 = refDate.getFullYear();
+  const m2 = refDate.getMonth();
+  const d2 = refDate.getDate();
+  let months = (y2 - y1) * 12 + (m2 - m1);
+  if (d2 < d1) months -= 1; // 当月の誕生日未到達なら-1
+  return Math.max(0, months);
+}
+
+function getAwakeWindowByMonths(monthsAge) {
+  // 参考レンジ（分）: 文献や一般的な目安に基づく緩めの範囲
+  if (monthsAge === null) return [120, 150];
+  if (monthsAge <= 2) return [45, 90];
+  if (monthsAge <= 4) return [75, 120];
+  if (monthsAge <= 6) return [90, 150];
+  if (monthsAge <= 8) return [120, 180];
+  if (monthsAge <= 10) return [150, 210];
+  if (monthsAge <= 12) return [180, 240];
+  return [210, 300];
+}
+
+function getNapLengthByMonths(monthsAge, nextNapStart) {
+  const hour = nextNapStart.getHours();
+  // 基本レンジ（分）
+  let minMax;
+  if (monthsAge === null) {
+    minMax = [60, 90];
+  } else if (monthsAge <= 2) {
+    minMax = [60, 120];
+  } else if (monthsAge <= 4) {
+    minMax = [60, 120];
+  } else if (monthsAge <= 6) {
+    minMax = [60, 90];
+  } else if (monthsAge <= 8) {
+    minMax = [45, 90];
+  } else if (monthsAge <= 12) {
+    minMax = [45, 90];
+  } else {
+    minMax = [45, 60];
+  }
+  let nap = randomIntInclusive(minMax[0], minMax[1]);
+  // 15時以降は短めに制限
+  if (hour >= 15) {
+    nap = Math.min(nap, 45);
+  }
+  return nap;
+}
+
+function randomIntInclusive(min, max) {
+  const mn = Math.ceil(min);
+  const mx = Math.floor(max);
+  return Math.floor(Math.random() * (mx - mn + 1)) + mn;
+}
+
 function updatePrediction() {
   if (logs.length === 0) return;
   const lastLog = logs[logs.length - 1];
@@ -197,16 +302,20 @@ function updatePrediction() {
   const wakeTime = new Date();
   wakeTime.setHours(h, m);
 
-  // 活動時間を設定（7ヶ月は約2h〜2.5h）
-  const awakeMinutes = 120 + Math.floor(Math.random() * 30);
+  const birthDate = loadBirth();
+  const monthsAge = birthDate ? calculateMonthsAge(birthDate, new Date()) : null;
+
+  const [awakeMin, awakeMax] = getAwakeWindowByMonths(monthsAge);
+  const awakeMinutes = randomIntInclusive(awakeMin, awakeMax);
   const nextNapStart = new Date(wakeTime.getTime() + awakeMinutes * 60000);
 
-  // 15時以降の昼寝は短く（30分以内）
-  let napLengthMinutes = (nextNapStart.getHours() >= 15) ? 30 : 90;
+  const napLengthMinutes = getNapLengthByMonths(monthsAge, nextNapStart);
   const wakeUpTime = new Date(nextNapStart.getTime() + napLengthMinutes * 60000);
 
+  const monthsInfo = monthsAge !== null ? `（月齢: ${monthsAge}ヶ月）` : "";
+
   document.getElementById("prediction").innerHTML =
-    `<b>次の寝かしつけ目安</b><br>
+    `<b>次の寝かしつけ目安</b>${monthsInfo}<br>
      ${formatTime(nextNapStart)}ごろベッドに<br>
      <b>入眠予測</b> ${formatTime(new Date(nextNapStart.getTime() + 5*60000))}<br>
      <b>起床予測</b> ${formatTime(wakeUpTime)}`;
@@ -311,6 +420,23 @@ updatePrediction();
 const timeInputEl = document.getElementById('timeInput');
 if (timeInputEl) {
   timeInputEl.value = nowTimeString();
+}
+
+// 生年月日の初期化
+const birthInputEl = document.getElementById('birthInput');
+if (birthInputEl) {
+  const saved = localStorage.getItem(BIRTH_KEY);
+  if (saved) {
+    birthInputEl.value = saved;
+    const bd = loadBirth();
+    if (bd) {
+      document.getElementById('birthStatus').textContent = `保存済み（月齢: ${calculateMonthsAge(bd)}ヶ月）`;
+    }
+  }
+  birthInputEl.addEventListener('change', () => {
+    // 入力変更で即保存
+    saveBirth(false);
+  });
 }
 </script>
 
