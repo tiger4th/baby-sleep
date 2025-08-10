@@ -478,7 +478,7 @@ function updatePrediction() {
 
   const monthsInfo = monthsAge !== null ? `（月齢: ${monthsAge}ヶ月）` : "";
   const historicalInfo = historicalPrediction ? 
-    `<br><small style="color:#666;">過去データベース: 起きてる時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
+    `<br><small style="color:#666;">過去データベース: 覚醒時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
 
   document.getElementById("prediction").innerHTML =
     `<b>次の寝かしつけ目安</b>${monthsInfo}<br>
@@ -545,7 +545,7 @@ function updateTimelineChart() {
       if (end <= dayStartMs || start >= dayEndMs) continue;
       if (start < dayStartMs) start = dayStartMs;
       if (end > dayEndMs) end = dayEndMs;
-      const label = seq[i].type === 'nap' ? '睡眠' : '起きてる';
+      const label = seq[i].type === 'nap' ? '睡眠' : '覚醒';
       const color = seq[i].type === 'nap' ? '#4CAF50' : '#FF9800';
       evs.push({ label, start: new Date(start), end: new Date(end), color, dayStartMs });
     }
@@ -821,7 +821,7 @@ function analyzeDayPattern(dayLogs, dateKey) {
       const [wakeHour, wakeMin] = current.time.split(':').map(Number);
       const [napHour, napMin] = next.time.split(':').map(Number);
       
-      // 起きてる時間を計算
+      // 覚醒時間を計算
       let awakeTime = (napHour * 60 + napMin) - (wakeHour * 60 + wakeMin);
       if (awakeTime < 0) awakeTime += 24 * 60; // 日をまたぐ場合
       
@@ -881,7 +881,7 @@ function showPredictionStats() {
             <small>（1日平均 ${Math.round(stats.avgLogsPerDay)}件）</small>
           </div>
           <div>
-            <b>平均起きてる時間</b><br>
+            <b>平均覚醒時間</b><br>
             ${Math.round(stats.avgAwakeTime)}分<br>
             <small>（標準偏差: ±${Math.round(stats.stdAwakeTime)}分）</small>
           </div>
@@ -907,7 +907,7 @@ function showPredictionStats() {
     const container = document.createElement('div');
     container.id = 'predictionStats';
     container.innerHTML = statsHtml;
-    document.getElementById('prediction').after(container);
+    document.getElementById('timelineChart').after(container);
   }
 }
 
@@ -983,11 +983,11 @@ function analyzePatternTrend(awakeTimes, napLengths) {
   
   let trend = '';
   if (recentAvg > earlyAvg + 30) {
-    trend = '起きてる時間が徐々に長くなっています';
+    trend = '覚醒時間が徐々に長くなっています';
   } else if (recentAvg < earlyAvg - 30) {
-    trend = '起きてる時間が徐々に短くなっています';
+    trend = '覚醒時間が徐々に短くなっています';
   } else {
-    trend = '起きてる時間は安定しています';
+    trend = '覚醒時間は安定しています';
   }
 
   // 睡眠時間の一貫性
