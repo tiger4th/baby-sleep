@@ -835,6 +835,10 @@ details > div {
   background: var(--card-background) !important;
   border-color: var(--accent-color) !important;
 }
+
+#timelineChart {
+  margin-bottom: 20px;
+}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js?v=20250810-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.umd.min.js?v=20250810-1"></script>
@@ -929,6 +933,7 @@ details > div {
         <button class="btn btn-outline" onclick="shiftDay(1)">翌日</button>
       </div>
     </div>
+    <br>
     <div id="viewDateStatus" class="status status-info"></div>
   </div>
 
@@ -1454,7 +1459,7 @@ function updatePrediction() {
 
   const monthsInfo = monthsAge !== null ? `月齢: ${monthsAge}ヶ月` : "";
   const historicalInfo = historicalPrediction ? 
-    `<small style="color:#666;">過去データベース: 覚醒時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
+    `<small style="color:#666;">過去データ: 覚醒時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
 
   document.getElementById("prediction").innerHTML = `
     <div class="grid grid-cols-3">
