@@ -48,6 +48,16 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
 <div id="prediction"></div>
 <canvas id="timelineChart" height="150"></canvas>
 
+<div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
+  <b>ぴよログからインポート</b><br>
+  <input id="piyoFile" type="file" accept=".txt">
+  <button onclick="handleImportPiyolog()">インポート</button>
+  <span id="importStatus" style="margin-left:8px;color:#666;"></span>
+  <div style="color:#888; font-size:0.9em; margin-top:6px;">
+    最新日の「起きる／寝る／ミルク」を取り込みます。他の項目は無視します。
+  </div>
+</div>
+
 <script>
 let logs = JSON.parse(localStorage.getItem("babyLogs") || "[]");
 let timelineChart = null;
@@ -292,13 +302,22 @@ function randomIntInclusive(min, max) {
 
 function updatePrediction() {
   if (logs.length === 0) return;
-  const lastLog = logs[logs.length - 1];
-  if (lastLog.type !== "wake") {
+  // 直近の「状態」ログ（wake/nap）のみを見る。
+  const lastStateIndex = [...logs].map((l, i) => ({...l, i}))
+    .filter(l => l.type === 'wake' || l.type === 'nap')
+    .map(l => l.i)
+    .pop();
+  if (lastStateIndex === undefined) {
+    document.getElementById("prediction").innerHTML = "起床ログ後に予測が表示されます。";
+    return;
+  }
+  const lastState = logs[lastStateIndex];
+  if (lastState.type !== 'wake') {
     document.getElementById("prediction").innerHTML = "起床ログ後に予測が表示されます。";
     return;
   }
 
-  const [h, m] = lastLog.time.split(":").map(Number);
+  const [h, m] = lastState.time.split(":").map(Number);
   const wakeTime = new Date();
   wakeTime.setHours(h, m);
 
@@ -335,9 +354,11 @@ function updateTimelineChart() {
   today.setHours(7, 0, 0, 0);
   const todayMs = today.getTime();
 
-  for (let i = 0; i < logs.length - 1; i++) {
-    const current = logs[i];
-    const next = logs[i + 1];
+  // 「状態」ログ（wake/nap）のみで区間を作成。ミルク等は無視。
+  const stateLogs = logs.filter(l => l.type === 'wake' || l.type === 'nap');
+  for (let i = 0; i < stateLogs.length - 1; i++) {
+    const current = stateLogs[i];
+    const next = stateLogs[i + 1];
 
     const [sh, sm] = current.time.split(":").map(Number);
     const [eh, em] = next.time.split(":").map(Number);
@@ -408,6 +429,94 @@ function updateTimelineChart() {
     baseConfig.options.scales.x = linearX;
     timelineChart = new Chart(ctx, baseConfig);
   }
+}
+
+// ぴよログ取り込み
+function handleImportPiyolog() {
+  const input = document.getElementById('piyoFile');
+  const status = document.getElementById('importStatus');
+  if (!input || !input.files || input.files.length === 0) {
+    status.textContent = 'ファイルを選択してください';
+    return;
+  }
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const text = String(reader.result || '');
+      const parsed = parsePiyologText(text);
+      if (!parsed || !parsed.items || parsed.items.length === 0) {
+        status.textContent = '取り込める記録が見つかりませんでした';
+        return;
+      }
+      // 上書きインポート（最新日のみ）
+      logs = parsed.items;
+      sortLogs();
+      localStorage.setItem('babyLogs', JSON.stringify(logs));
+      renderLogs();
+      updateTimelineChart();
+      updatePrediction();
+      status.textContent = `インポート完了（${parsed.dateKey} / ${parsed.items.length}件）`;
+    } catch (e) {
+      console.error(e);
+      status.textContent = 'インポート中にエラーが発生しました';
+    }
+  };
+  reader.onerror = () => {
+    status.textContent = 'ファイルの読み込みに失敗しました';
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function parsePiyologText(text) {
+  const lines = text.split(/\r?\n/);
+  const dateHeaderRegex = /^\s*(\d{4})\/(\d{1,2})\/(\d{1,2})\s*\(/;
+  const timeLineRegex = /^\s*(\d{2}):(\d{2})\s+(.+)/;
+
+  /** @type {Record<string, Array<{time: string, type: 'wake'|'nap'|'milk'}>>} */
+  const dateToItems = {};
+  let currentDateKey = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const dh = dateHeaderRegex.exec(line);
+    if (dh) {
+      const y = dh[1].padStart(4, '0');
+      const m = dh[2].padStart(2, '0');
+      const d = dh[3].padStart(2, '0');
+      currentDateKey = `${y}/${m}/${d}`;
+      if (!dateToItems[currentDateKey]) dateToItems[currentDateKey] = [];
+      continue;
+    }
+    if (!currentDateKey) continue;
+    const tl = timeLineRegex.exec(line);
+    if (!tl) continue;
+    const hh = tl[1];
+    const mm = tl[2];
+    const body = tl[3];
+    const time = `${hh}:${mm}`;
+    let type = null;
+    if (body.startsWith('起きる')) type = 'wake';
+    else if (body.startsWith('寝る')) type = 'nap';
+    else if (body.startsWith('ミルク')) type = 'milk';
+    if (type) {
+      dateToItems[currentDateKey].push({ time, type });
+    }
+  }
+
+  const keys = Object.keys(dateToItems);
+  if (keys.length === 0) return { dateKey: null, items: [] };
+  const latestKey = keys.sort((a, b) => parseDateKey(a) - parseDateKey(b))[keys.length - 1];
+  return { dateKey: latestKey, items: dateToItems[latestKey] };
+}
+
+function parseDateKey(key) {
+  // key: YYYY/MM/DD
+  const [y, m, d] = key.split('/').map(Number);
+  const dt = new Date();
+  dt.setHours(0, 0, 0, 0);
+  dt.setFullYear(y, m - 1, d);
+  return dt.getTime();
 }
 
 // 初期化
