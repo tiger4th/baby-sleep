@@ -61,7 +61,7 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
   <button onclick="handleImportPiyolog()">インポート</button>
   <span id="importStatus" style="margin-left:8px;color:#666;"></span>
   <div style="color:#888; font-size:0.9em; margin-top:6px;">
-    最新日の「起きる／寝る」を取り込みます。他の項目は無視します。
+    ファイルに含まれる全ての日の「起きる／寝る」を取り込みます（同日の既存記録は上書き）。
   </div>
 </div>
 
@@ -548,21 +548,22 @@ function handleImportPiyolog() {
   reader.onload = () => {
     try {
       const text = String(reader.result || '');
-      const parsed = parsePiyologText(text);
-      if (!parsed || !parsed.items || parsed.items.length === 0) {
+      const parsed = parsePiyologTextMulti(text);
+      const keys = Object.keys(parsed);
+      if (keys.length === 0) {
         status.textContent = '取り込める記録が見つかりませんでした';
         return;
       }
-      // 取り込み: 最新日を現在の表示日に設定し、その日のログを上書き
-      setCurrentDateKey(parsed.dateKey);
-      allLogs[parsed.dateKey] = parsed.items.filter(l => l && (l.type === 'wake' || l.type === 'nap'));
-      logs = allLogs[parsed.dateKey];
-      sortLogs();
+      // 各日を上書き保存
+      for (const k of keys) {
+        const items = parsed[k].filter(l => l && (l.type === 'wake' || l.type === 'nap'));
+        allLogs[k] = items;
+      }
       saveAllLogs();
-      renderLogs();
-      updateTimelineChart();
-      updatePrediction();
-      status.textContent = `インポート完了（${parsed.dateKey} / ${parsed.items.length}件）`;
+      // 最終日のキーに移動
+      const latestKey = keys.sort((a, b) => parseDateKey(a) - parseDateKey(b))[keys.length - 1];
+      setCurrentDateKey(latestKey);
+      status.textContent = `インポート完了（${keys.length}日 / 最終日: ${latestKey}）`;
     } catch (e) {
       console.error(e);
       status.textContent = 'インポート中にエラーが発生しました';
@@ -622,6 +623,42 @@ function parseDateKey(key) {
   dt.setHours(0, 0, 0, 0);
   dt.setFullYear(y, m - 1, d);
   return dt.getTime();
+}
+
+// 複数日を返す版
+function parsePiyologTextMulti(text) {
+  const lines = text.split(/\r?\n/);
+  const dateHeaderRegex = /^\s*(\d{4})\/(\d{1,2})\/(\d{1,2})\s*\(/;
+  const timeLineRegex = /^\s*(\d{2}):(\d{2})\s+(.+)/;
+  /** @type {Record<string, Array<{time: string, type: 'wake'|'nap'}>>} */
+  const dateToItems = {};
+  let currentDateKey = null;
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const dh = dateHeaderRegex.exec(line);
+    if (dh) {
+      const y = dh[1].padStart(4, '0');
+      const m = dh[2].padStart(2, '0');
+      const d = dh[3].padStart(2, '0');
+      currentDateKey = `${y}/${m}/${d}`;
+      if (!dateToItems[currentDateKey]) dateToItems[currentDateKey] = [];
+      continue;
+    }
+    if (!currentDateKey) continue;
+    const tl = timeLineRegex.exec(line);
+    if (!tl) continue;
+    const hh = tl[1];
+    const mm = tl[2];
+    const body = tl[3];
+    const time = `${hh}:${mm}`;
+    let type = null;
+    if (body.startsWith('起きる')) type = 'wake';
+    else if (body.startsWith('寝る')) type = 'nap';
+    if (type) {
+      dateToItems[currentDateKey].push({ time, type });
+    }
+  }
+  return dateToItems;
 }
 
 // 初期化
