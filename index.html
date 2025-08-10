@@ -6,69 +6,874 @@
 <title>ベビースリープ予測</title>
 <link rel="manifest" href="./manifest.json">
 <style>
-body { font-family: sans-serif; padding: 10px; background: #f5f5f5; }
-h1 { font-size: 1.4em; }
-button { margin: 5px; padding: 10px; font-size: 1em; }
-#log, #prediction { margin-top: 10px; background: white; padding: 10px; border-radius: 6px; }
-canvas { background: white; margin-top: 15px; border-radius: 6px; }
+/* モダンなカラーパレット */
+:root {
+  --primary-color: #6366f1;
+  --primary-hover: #4f46e5;
+  --secondary-color: #10b981;
+  --secondary-hover: #059669;
+  --accent-color: #f59e0b;
+  --accent-hover: #d97706;
+  --danger-color: #ef4444;
+  --danger-hover: #dc2626;
+  --background-color: #f8fafc;
+  --card-background: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  
+  /* 予測・チャート用の改善された色 */
+  --prediction-bg: #fef7ed;
+  --prediction-border: #fbbf24;
+  --prediction-text: #92400e;
+  --prediction-text-secondary: #a16207;
+  --chart-awake: #dc2626;
+  --chart-sleep: #2563eb;
+  --chart-bg: #ffffff;
+  --chart-border: #e2e8f0;
+}
+
+/* ベーススタイル */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: var(--background-color);
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+/* ヘッダー */
+.app-header {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  padding: 2rem 1rem;
+  text-align: center;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.app-header .subtitle {
+  margin-top: 0.5rem;
+  opacity: 0.9;
+  font-size: 1.1rem;
+}
+
+/* メインコンテナ */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* カードベースのレイアウト */
+.card {
+  background: var(--card-background);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.card-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.card-header .icon {
+  margin-right: 0.75rem;
+  font-size: 1.5rem;
+  color: var(--primary-color);
+}
+
+/* ボタンスタイル */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  min-height: 44px;
+  gap: 0.5rem;
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--secondary-color);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: var(--secondary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-accent {
+  background: var(--accent-color);
+  color: white;
+}
+
+.btn-accent:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-danger {
+  background: var(--danger-color);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: var(--danger-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+}
+
+.btn-outline:hover {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  min-height: 36px;
+}
+
+/* フォーム要素 */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+  background: var(--card-background);
+  color: var(--text-primary);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.form-control:disabled {
+  background: var(--background-color);
+  cursor: not-allowed;
+}
+
+/* セレクトボックス */
+select.form-control {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+  appearance: none;
+}
+
+/* ボタングループ */
+.btn-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-group .btn {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* グリッドレイアウト */
+.grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.grid-cols-1 { grid-template-columns: 1fr; }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* ステータス表示 */
+.status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--secondary-color);
+}
+
+.status-info {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary-color);
+}
+
+.status-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--accent-color);
+}
+
+/* ログ表示 */
+.log-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--card-background);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-color);
+}
+
+.log-item.wake {
+  border-left-color: var(--accent-color);
+}
+
+.log-item.nap {
+  border-left-color: var(--secondary-color);
+}
+
+.log-time {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.log-type {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.log-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* 予測表示 */
+.prediction-card {
+  background: var(--prediction-bg);
+  border: 2px solid var(--prediction-border);
+  color: var(--prediction-text);
+}
+
+.prediction-time {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--prediction-text);
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.prediction-label {
+  font-size: 0.9rem;
+  color: var(--prediction-text-secondary);
+  text-align: center;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.prediction-item {
+  text-align: center;
+  padding: 1rem;
+}
+
+.prediction-item:not(:last-child) {
+  border-right: 1px solid var(--prediction-border);
+}
+
+/* チャート */
+.chart-container {
+  background: var(--chart-bg);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  margin: 1.5rem 0;
+  border: 1px solid var(--chart-border);
+}
+
+/* 統計表示 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 1rem;
+  background: var(--card-background);
+  border-radius: var(--radius-md);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 0.5rem;
+  }
+  
+  .app-header {
+    padding: 1.5rem 0.5rem;
+  }
+  
+  .app-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .card {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .btn-group {
+    flex-direction: column;
+  }
+  
+  .btn-group .btn {
+    width: 100%;
+  }
+  
+  .grid-cols-2,
+  .grid-cols-3 {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .log-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .log-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* スクロールバーのカスタマイズ */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* フォーカス表示の改善 */
+*:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* ダークモード切り替えボタン */
+#darkModeToggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+#darkModeToggle:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ダークモード時のボタン */
+.dark-mode #darkModeToggle {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark-mode #darkModeToggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background-color: #0f172a;
+    --card-background: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+    --border-color: #334155;
+  }
+}
+
+/* ダークモード用の予測・チャート色 */
+.dark-mode {
+  /* ページ全体の色 - より高い優先度で適用 */
+  --background-color: #0f172a !important;
+  --card-background: #1e293b !important;
+  --text-primary: #f1f5f9 !important;
+  --text-secondary: #cbd5e1 !important;
+  --text-muted: #64748b !important;
+  --border-color: #334155 !important;
+  
+  /* 予測・チャート用の色 */
+  --prediction-bg: #451a03 !important;
+  --prediction-border: #f59e0b !important;
+  --prediction-text: #fef3c7 !important;
+  --prediction-text-secondary: #fde68a !important;
+  --chart-awake: #f87171 !important;
+  --chart-sleep: #60a5fa !important;
+  --chart-bg: #1e293b !important;
+  --chart-border: #334155 !important;
+  
+  /* ヘッダーの背景色を調整 */
+  --header-bg-start: #1e40af !important;
+  --header-bg-end: #059669 !important;
+  
+  /* ステータス表示の背景色を調整 */
+  --status-success-bg: rgba(16, 185, 129, 0.2) !important;
+  --status-info-bg: rgba(99, 102, 241, 0.2) !important;
+  --status-warning-bg: rgba(245, 158, 11, 0.2) !important;
+  
+  /* ボタンの色を調整 */
+  --btn-outline-color: #60a5fa !important;
+  --btn-outline-border: #60a5fa !important;
+  --btn-outline-hover-bg: #60a5fa !important;
+  --btn-outline-hover-color: #1e293b !important;
+}
+
+/* ダークモード時のヘッダー背景 */
+.dark-mode .app-header {
+  background: linear-gradient(135deg, var(--header-bg-start), var(--header-bg-end));
+}
+
+/* ダークモード時のステータス表示 */
+.dark-mode .status-success {
+  background: var(--status-success-bg);
+}
+
+.dark-mode .status-info {
+  background: var(--status-info-bg);
+}
+
+.dark-mode .status-warning {
+  background: var(--status-warning-bg);
+}
+
+/* ダークモード時のボタン */
+.dark-mode .btn-outline {
+  color: var(--btn-outline-color);
+  border-color: var(--btn-outline-border);
+}
+
+.dark-mode .btn-outline:hover {
+  background: var(--btn-outline-hover-bg);
+  color: var(--btn-outline-hover-color);
+}
+
+/* details要素のスタイリング */
+details summary {
+  cursor: pointer;
+  padding: 0.5rem;
+  background: var(--background-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+details summary:hover {
+  background: var(--border-color);
+}
+
+details > div {
+  background: var(--background-color);
+  margin-top: 0.5rem;
+}
+
+/* ダークモード時のdetails要素 */
+.dark-mode details summary {
+  background: var(--card-background);
+  color: var(--text-secondary);
+}
+
+.dark-mode details summary:hover {
+  background: var(--border-color);
+}
+
+/* ダークモード時のdetails内容 */
+.dark-mode details > div {
+  background: var(--card-background);
+}
+
+/* ダークモード時の統計表示 */
+.dark-mode .stat-item {
+  background: var(--card-background);
+}
+
+/* ダークモード時の統計値の色 */
+.dark-mode .stat-value {
+  color: var(--primary-color);
+}
+
+/* ダークモード時の統計ラベルの色 */
+.dark-mode .stat-label {
+  color: var(--text-secondary);
+}
+
+/* ダークモード時の予測統計の背景 */
+.dark-mode .card .card {
+  background: var(--card-background);
+}
+
+/* ダークモード時の予測統計のボーダー */
+.dark-mode .card .card {
+  border-color: var(--border-color);
+}
+
+/* ダークモード時の動的生成要素 */
+.dark-mode .log-item .log-time {
+  color: var(--text-primary);
+}
+
+.dark-mode .log-item .log-type {
+  color: var(--text-secondary);
+}
+
+/* ダークモード時の予測統計の説明文背景 */
+.dark-mode .prediction-stats-info {
+  background: var(--card-background) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* 月齢情報表示 */
+.months-info {
+  text-align: center;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(99, 102, 241, 0.15);
+  border-radius: var(--radius-md);
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+/* 予測統計の説明文背景 */
+.prediction-stats-info {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(16, 185, 129, 0.15);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--secondary-color);
+  color: var(--secondary-color);
+  font-weight: 600;
+}
+
+/* 睡眠パターンの傾向表示 */
+.pattern-trend-info {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--background-color);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--accent-color);
+}
+
+/* ダークモード時の月齢情報表示 */
+.dark-mode .months-info {
+  background: rgba(99, 102, 241, 0.2) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+}
+
+/* ダークモード時の予測統計の説明文背景 */
+.dark-mode .prediction-stats-info {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: var(--secondary-color) !important;
+}
+
+/* ダークモード時の予測統計の傾向表示 */
+.dark-mode .pattern-trend-info {
+  background: var(--card-background) !important;
+  border-color: var(--accent-color) !important;
+}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js?v=20250810-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.umd.min.js?v=20250810-1"></script>
 </head>
 <body>
 
-<h1>ベビースリープ予測</h1>
-<div>
-  <button onclick="addLog('wake')">起きた</button>
-  <button onclick="addLog('nap')">寝た</button>
+<div class="app-header">
+  <h1>🌙 ベビースリープ予測</h1>
+  <div class="subtitle">赤ちゃんの睡眠パターンを記録・予測</div>
+  <button id="darkModeToggle" class="btn btn-outline" style="position: absolute; top: 1rem; right: 1rem;">
+    🌙
+  </button>
 </div>
   
-  <div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
-    <b>時間指定で追加／編集</b><br>
-    <select id="typeSelect">
+<div class="container">
+  <!-- クイックアクション -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">⚡</span>
+      <h3>クイックアクション</h3>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="addLog('wake')">
+        <span>🌅</span>
+        起きた
+      </button>
+      <button class="btn btn-secondary" onclick="addLog('nap')">
+        <span>😴</span>
+        寝た
+      </button>
+    </div>
+  </div>
+  
+  <!-- 時間指定で追加・編集 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">⏰</span>
+      <h3>時間指定で追加・編集</h3>
+    </div>
+    <div class="grid grid-cols-3">
+      <div class="form-group">
+        <label class="form-label">タイプ</label>
+        <select id="typeSelect" class="form-control">
       <option value="wake">起きた</option>
       <option value="nap">寝た</option>
     </select>
-    <input id="timeInput" type="time" step="60">
-    <button id="addBtn" onclick="handleAddOrUpdate()">この時間で追加</button>
-    <button id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">キャンセル</button>
-    <span id="editStatus" style="margin-left:8px;color:#666;"></span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">時刻</label>
+        <input id="timeInput" type="time" step="60" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">&nbsp;</label>
+        <div class="btn-group">
+          <button id="addBtn" class="btn btn-primary" onclick="handleAddOrUpdate()">追加</button>
+          <button id="cancelEditBtn" class="btn btn-outline" onclick="cancelEdit()" style="display:none;">キャンセル</button>
+        </div>
+      </div>
+    </div>
+    <div id="editStatus" class="status status-info" style="display:none;"></div>
   </div>
 
-  <div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
-    <b>生年月日</b><br>
-    <input id="birthInput" type="date">
-    <button onclick="saveBirth()">保存</button>
-    <span id="birthStatus" style="margin-left:8px;color:#666;"></span>
+  <!-- 生年月日設定 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">🎂</span>
+      <h3>生年月日</h3>
+    </div>
+    <div class="grid grid-cols-2">
+      <div class="form-group">
+        <input id="birthInput" type="date" class="form-control">
+      </div>
+      <div class="form-group">
+        <button class="btn btn-secondary" onclick="saveBirth()">保存</button>
+      </div>
+    </div>
+    <div id="birthStatus" class="status status-info"></div>
   </div>
 
-  <div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
-    <b>表示日</b><br>
-    <input id="viewDate" type="date">
-    <button onclick="goToday()">今日</button>
-    <button onclick="shiftDay(-1)">前日</button>
-    <button onclick="shiftDay(1)">翌日</button>
-    <span id="viewDateStatus" style="margin-left:8px;color:#666;"></span>
+  <!-- 表示日設定 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">📅</span>
+      <h3>表示日</h3>
+    </div>
+    <div class="grid grid-cols-4">
+      <div class="form-group">
+        <input id="viewDate" type="date" class="form-control">
+      </div>
+      <div class="form-group">
+        <button class="btn btn-accent" onclick="goToday()">今日</button>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-outline" onclick="shiftDay(-1)">前日</button>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-outline" onclick="shiftDay(1)">翌日</button>
+      </div>
+    </div>
+    <div id="viewDateStatus" class="status status-info"></div>
   </div>
 
+  <!-- 記録表示 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">📝</span>
+      <h3>記録</h3>
+    </div>
 <div id="log"></div>
-<div id="prediction"></div>
-<canvas id="timelineChart" height="150"></canvas>
+  </div>
 
-<div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
-  <b>ぴよログからインポート</b><br>
-  <input id="piyoFile" type="file" accept=".txt">
-  <button onclick="handleImportPiyolog()">インポート</button>
-  <span id="importStatus" style="margin-left:8px;color:#666;"></span>
-  <div style="color:#888; font-size:0.9em; margin-top:6px;">
+  <!-- 予測表示 -->
+  <div class="card prediction-card">
+    <div class="card-header">
+      <span class="icon">🔮</span>
+      <h3>次の寝かしつけ予測</h3>
+    </div>
+<div id="prediction"></div>
+  </div>
+
+  <!-- タイムラインチャート -->
+  <div class="chart-container">
+    <div class="card-header">
+      <span class="icon">📊</span>
+      <h3>睡眠タイムライン</h3>
+    </div>
+<canvas id="timelineChart" height="150"></canvas>
+  </div>
+
+  <!-- ぴよログインポート -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">📁</span>
+      <h3>ぴよログからインポート</h3>
+    </div>
+    <div class="grid grid-cols-2">
+      <div class="form-group">
+        <input id="piyoFile" type="file" accept=".txt" class="form-control">
+      </div>
+      <div class="form-group">
+        <button class="btn btn-secondary" onclick="handleImportPiyolog()">インポート</button>
+      </div>
+    </div>
+    <div id="importStatus" class="status status-info"></div>
+    <div style="color:var(--text-muted); font-size:0.9em; margin-top:0.5rem;">
     ファイルに含まれる全ての日の「起きる／寝る」を取り込みます（同日の既存記録は上書き）。
   </div>
 </div>
 
-<div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
-  <b>CSVエクスポート</b><br>
-  <button onclick="exportSleepData()">睡眠データをエクスポート</button>
-  <span id="analysisStatus" style="margin-left:8px;color:#666;"></span>
+  <!-- CSVエクスポート -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">💾</span>
+      <h3>CSVエクスポート</h3>
+    </div>
+    <button class="btn btn-primary" onclick="exportSleepData()">
+      <span>📊</span>
+      睡眠データをエクスポート
+    </button>
+    <div id="analysisStatus" class="status status-info" style="margin-top:0.5rem;"></div>
+  </div>
 </div>
 
 <script>
@@ -275,15 +1080,23 @@ function renderLogs() {
   const container = document.getElementById("log");
   const total = logs.length;
   const recentCount = 3;
-  const header = "<b>記録</b><br>";
+  
+  if (total === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+        <div>まだ記録がありません</div>
+        <div style="font-size: 0.9rem; margin-top: 0.5rem;">「起きた」または「寝た」ボタンを押して記録を開始してください</div>
+      </div>
+    `;
+    return;
+  }
 
   if (total <= recentCount) {
     const allHtml = logs.map((l, i) => {
-      return `${l.time} - ${translateType(l.type)} ` +
-        `<button onclick="startEditLog(${i})">編集</button> ` +
-        `<button onclick="deleteLog(${i})">削除</button>`;
-    }).join("<br>");
-    container.innerHTML = header + allHtml;
+      return createLogItemHtml(l, i);
+    }).join('');
+    container.innerHTML = allHtml;
     return;
   }
 
@@ -291,27 +1104,50 @@ function renderLogs() {
   const recentBaseIndex = total - recentCount;
 
   const olderHtml = logs.slice(0, olderCount).map((l, i) => {
-    const idx = i; // 先頭からのインデックスはそのまま
-    return `${l.time} - ${translateType(l.type)} ` +
-      `<button onclick="startEditLog(${idx})">編集</button> ` +
-      `<button onclick="deleteLog(${idx})">削除</button>`;
-  }).join("<br>");
+    const idx = i;
+    return createLogItemHtml(l, idx);
+  }).join('');
 
   const recentHtml = logs.slice(recentBaseIndex).map((l, i) => {
-    const idx = recentBaseIndex + i; // 元配列でのインデックス
-    return `${l.time} - ${translateType(l.type)} ` +
-      `<button onclick="startEditLog(${idx})">編集</button> ` +
-      `<button onclick="deleteLog(${idx})">削除</button>`;
-  }).join("<br>");
+    const idx = recentBaseIndex + i;
+    return createLogItemHtml(l, idx);
+  }).join('');
 
-  const detailsHtml =
-    `<details>` +
-      `<summary>過去の記録を表示（${olderCount}件）</summary>` +
-      `${olderHtml ? `<div style="margin-top:8px;">${olderHtml}</div>` : ""}` +
-    `</details>`;
+  const detailsHtml = `
+    <details style="margin-bottom: 1rem;">
+      <summary style="cursor: pointer; padding: 0.5rem; border-radius: var(--radius-md);">
+        📚 過去の記録を表示（${olderCount}件）
+      </summary>
+      <div style="margin-top: 0.5rem;">
+        ${olderHtml || '<div style="text-align: center; color: var(--text-muted); padding: 1rem;">記録がありません</div>'}
+      </div>
+    </details>
+  `;
 
-  // 昇順の表示順を維持するため、先に折りたたみ、その後に直近3件を表示
-  container.innerHTML = header + detailsHtml + "<br>" + recentHtml;
+  container.innerHTML = detailsHtml + recentHtml;
+}
+
+function createLogItemHtml(log, index) {
+  const typeClass = log.type === 'wake' ? 'wake' : 'nap';
+  const typeIcon = log.type === 'wake' ? '🌅' : '😴';
+  const typeText = translateType(log.type);
+  
+  return `
+    <div class="log-item ${typeClass} fade-in">
+      <div>
+        <div class="log-time">${log.time}</div>
+        <div class="log-type">${typeIcon} ${typeText}</div>
+      </div>
+      <div class="log-actions">
+        <button class="btn btn-sm btn-outline" onclick="startEditLog(${index})">
+          ✏️ 編集
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="deleteLog(${index})">
+          🗑️ 削除
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 function translateType(type) {
@@ -418,7 +1254,13 @@ function randomIntInclusive(min, max) {
 
 function updatePrediction() {
   if (logs.length === 0) {
-    document.getElementById("prediction").innerHTML = "この日の起床ログ後に予測が表示されます。";
+    document.getElementById("prediction").innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🔮</div>
+        <div>この日の起床ログ後に予測が表示されます</div>
+        <div style="font-size: 0.9rem; margin-top: 0.5rem;">「起きた」ボタンを押して記録を開始してください</div>
+      </div>
+    `;
     return;
   }
   // 直近の「状態」ログ（wake/nap）のみを見る。
@@ -427,12 +1269,24 @@ function updatePrediction() {
     .map(l => l.i)
     .pop();
   if (lastStateIndex === undefined) {
-    document.getElementById("prediction").innerHTML = "この日の起床ログ後に予測が表示されます。";
+    document.getElementById("prediction").innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🔮</div>
+        <div>この日の起床ログ後に予測が表示されます</div>
+        <div style="font-size: 0.9rem; margin-top: 0.5rem;">「起きた」ボタンを押して記録を開始してください</div>
+      </div>
+    `;
     return;
   }
   const lastState = logs[lastStateIndex];
   if (lastState.type !== 'wake') {
-    document.getElementById("prediction").innerHTML = "この日の起床ログ後に予測が表示されます。";
+    document.getElementById("prediction").innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🔮</div>
+        <div>この日の起床ログ後に予測が表示されます</div>
+        <div style="font-size: 0.9rem; margin-top: 0.5rem;">現在は睡眠中のようです</div>
+      </div>
+    `;
     return;
   }
 
@@ -480,12 +1334,27 @@ function updatePrediction() {
   const historicalInfo = historicalPrediction ? 
     `<br><small style="color:#666;">過去データベース: 覚醒時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
 
-  document.getElementById("prediction").innerHTML =
-    `<b>次の寝かしつけ目安</b>${monthsInfo}<br>
-     ${formatTime(nextNapStart)}ごろベッドに<br>
-     <b>入眠予測</b> ${formatTime(new Date(nextNapStart.getTime() + 5*60000))}<br>
-     <b>起床予測</b> ${formatTime(wakeUpTime)}
-     ${historicalInfo}`;
+  document.getElementById("prediction").innerHTML = `
+    <div class="grid grid-cols-3">
+      <div class="prediction-item">
+        <div class="prediction-label">寝かしつけ目安</div>
+        <div class="prediction-time">${formatTime(nextNapStart)}</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">ごろベッドに</div>
+      </div>
+      <div class="prediction-item">
+        <div class="prediction-label">入眠予測</div>
+        <div class="prediction-time">${formatTime(new Date(nextNapStart.getTime() + 5*60000))}</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">約5分後</div>
+      </div>
+      <div class="prediction-item">
+        <div class="prediction-label">起床予測</div>
+        <div class="prediction-time">${formatTime(wakeUpTime)}</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">睡眠時間 ${Math.round(finalNapLengthMinutes)}分</div>
+      </div>
+    </div>
+    ${monthsInfo ? `<div class="months-info">${monthsInfo}</div>` : ''}
+    ${historicalInfo ? `<div class="prediction-stats-info">${historicalInfo}</div>` : ''}
+  `;
 }
 
 function formatTime(date) {
@@ -546,7 +1415,7 @@ function updateTimelineChart() {
       if (start < dayStartMs) start = dayStartMs;
       if (end > dayEndMs) end = dayEndMs;
       const label = seq[i].type === 'nap' ? '睡眠' : '覚醒';
-      const color = seq[i].type === 'nap' ? '#4CAF50' : '#FF9800';
+      const color = seq[i].type === 'nap' ? getComputedStyle(document.documentElement).getPropertyValue('--chart-sleep').trim() : getComputedStyle(document.documentElement).getPropertyValue('--chart-awake').trim();
       evs.push({ label, start: new Date(start), end: new Date(end), color, dayStartMs });
     }
     return { evs, dayStartMs };
@@ -586,7 +1455,7 @@ function updateTimelineChart() {
         {
           label: '起床中',
           data: awakeData,
-          backgroundColor: '#FF9800',
+          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--chart-awake').trim(),
           borderSkipped: false,
           barPercentage: 0.9,
           categoryPercentage: 1.0,
@@ -595,7 +1464,7 @@ function updateTimelineChart() {
         {
           label: '睡眠中',
           data: sleepData,
-          backgroundColor: '#4CAF50',
+          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--chart-sleep').trim(),
           borderSkipped: false,
           barPercentage: 0.9,
           categoryPercentage: 1.0,
@@ -856,44 +1725,47 @@ function showPredictionStats() {
   
   if (allDates.length < 3) {
     statsHtml = `
-      <div style="background:white; padding:15px; border-radius:6px; margin-top:10px;">
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">📊</span>
         <h3>予測精度統計</h3>
-        <div style="color:#666; text-align:center; padding:20px;">
-          統計分析には最低3日分のデータが必要です<br>
-          <small>現在の記録: ${allDates.length}日分</small>
+        </div>
+        <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">📈</div>
+          <div>統計分析には最低3日分のデータが必要です</div>
+          <div style="font-size: 0.9rem; margin-top: 0.5rem; color: var(--text-secondary);">現在の記録: ${allDates.length}日分</div>
         </div>
       </div>
     `;
   } else {
     const stats = calculatePredictionStats();
     statsHtml = `
-      <div style="background:white; padding:15px; border-radius:6px; margin-top:10px;">
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">📊</span>
         <h3>予測精度統計</h3>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-          <div>
-            <b>データ期間</b><br>
-            ${stats.startDate} 〜 ${stats.endDate}<br>
-            <small>（${stats.totalDays}日間）</small>
           </div>
-          <div>
-            <b>記録総数</b><br>
-            ${stats.totalLogs}件<br>
-            <small>（1日平均 ${Math.round(stats.avgLogsPerDay)}件）</small>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value">${stats.startDate} 〜 ${stats.endDate}</div>
+            <div class="stat-label">データ期間（${stats.totalDays}日間）</div>
           </div>
-          <div>
-            <b>平均覚醒時間</b><br>
-            ${Math.round(stats.avgAwakeTime)}分<br>
-            <small>（標準偏差: ±${Math.round(stats.stdAwakeTime)}分）</small>
+          <div class="stat-item">
+            <div class="stat-value">${stats.totalLogs}件</div>
+            <div class="stat-label">記録総数（1日平均 ${Math.round(stats.avgLogsPerDay)}件）</div>
           </div>
-          <div>
-            <b>平均睡眠時間</b><br>
-            ${Math.round(stats.avgNapLength)}分<br>
-            <small>（標準偏差: ±${Math.round(stats.stdNapLength)}分）</small>
+          <div class="stat-item">
+            <div class="stat-value">${Math.round(stats.avgAwakeTime)}分</div>
+            <div class="stat-label">平均覚醒時間（標準偏差: ±${Math.round(stats.stdAwakeTime)}分）</div>
           </div>
+          <div class="stat-item">
+            <div class="stat-value">${Math.round(stats.avgNapLength)}分</div>
+            <div class="stat-label">平均睡眠時間（標準偏差: ±${Math.round(stats.stdNapLength)}分）</div>
         </div>
-        <div style="margin-top:15px; padding:10px; background:#f0f0f0; border-radius:4px;">
-          <b>睡眠パターンの傾向</b><br>
-          ${stats.patternTrend}
+        </div>
+        <div class="pattern-trend-info">
+          <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">睡眠パターンの傾向</div>
+          <div style="color: var(--text-secondary);">${stats.patternTrend}</div>
         </div>
       </div>
     `;
@@ -1105,6 +1977,151 @@ if (viewDateEl2) {
 }
 
 // 範囲は固定（1週間）
+
+// ダークモード切り替え機能
+function toggleDarkMode() {
+  const body = document.body;
+  const isDark = body.classList.contains('dark-mode');
+  
+  if (isDark) {
+    // ライトモードに切り替え
+    body.classList.remove('dark-mode');
+    localStorage.setItem('darkMode', 'light');
+    document.getElementById('darkModeToggle').textContent = '🌙';
+    
+    // 強制的にライトモードの色を適用
+    document.documentElement.style.setProperty('--background-color', '#f8fafc');
+    document.documentElement.style.setProperty('--card-background', '#ffffff');
+    document.documentElement.style.setProperty('--text-primary', '#1e293b');
+    document.documentElement.style.setProperty('--text-secondary', '#64748b');
+    document.documentElement.style.setProperty('--text-muted', '#94a3b8');
+    document.documentElement.style.setProperty('--border-color', '#e2e8f0');
+  } else {
+    // ダークモードに切り替え
+    body.classList.add('dark-mode');
+    localStorage.setItem('darkMode', 'dark');
+    document.getElementById('darkModeToggle').textContent = '☀️';
+    
+    // 強制的にダークモードの色を適用
+    document.documentElement.style.setProperty('--background-color', '#0f172a');
+    document.documentElement.style.setProperty('--card-background', '#1e293b');
+    document.documentElement.style.setProperty('--text-primary', '#f1f5f9');
+    document.documentElement.style.setProperty('--text-secondary', '#cbd5e1');
+    document.documentElement.style.setProperty('--text-muted', '#64748b');
+    document.documentElement.style.setProperty('--border-color', '#334155');
+  }
+  
+  // チャートの色を更新
+  if (timelineChart) {
+    updateTimelineChart();
+  }
+  
+  // 少し遅延させてからページ全体を再描画
+  setTimeout(() => {
+    // フォームコントロールの色を強制更新
+    const formControls = document.querySelectorAll('.form-control');
+    formControls.forEach(control => {
+      if (isDark) {
+        control.style.background = '#ffffff';
+        control.style.color = '#1e293b';
+      } else {
+        control.style.background = '#1e293b';
+        control.style.color = '#f1f5f9';
+      }
+    });
+  }, 100);
+}
+
+// ダークモードの初期化
+function initDarkMode() {
+  const savedMode = localStorage.getItem('darkMode');
+  
+  // ユーザーが明示的に設定した場合は、その設定を優先
+  if (savedMode === 'dark') {
+    document.body.classList.add('dark-mode');
+    document.getElementById('darkModeToggle').textContent = '☀️';
+    
+    // 強制的にダークモードの色を適用
+    document.documentElement.style.setProperty('--background-color', '#0f172a');
+    document.documentElement.style.setProperty('--card-background', '#1e293b');
+    document.documentElement.style.setProperty('--text-primary', '#f1f5f9');
+    document.documentElement.style.setProperty('--text-secondary', '#cbd5e1');
+    document.documentElement.style.setProperty('--text-muted', '#64748b');
+    document.documentElement.style.setProperty('--border-color', '#334155');
+  } else if (savedMode === 'light') {
+    document.body.classList.remove('dark-mode');
+    document.getElementById('darkModeToggle').textContent = '🌙';
+    
+    // 強制的にライトモードの色を適用
+    document.documentElement.style.setProperty('--background-color', '#f8fafc');
+    document.documentElement.style.setProperty('--card-background', '#ffffff');
+    document.documentElement.style.setProperty('--text-primary', '#1e293b');
+    document.documentElement.style.setProperty('--text-secondary', '#64748b');
+    document.documentElement.style.setProperty('--text-muted', '#94a3b8');
+    document.documentElement.style.setProperty('--border-color', '#e2e8f0');
+  } else {
+    // 初回アクセス時のみ、ブラウザの設定を使用
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (prefersDark) {
+      document.body.classList.add('dark-mode');
+      document.getElementById('darkModeToggle').textContent = '☀️';
+      localStorage.setItem('darkMode', 'dark');
+      
+      // 強制的にダークモードの色を適用
+      document.documentElement.style.setProperty('--background-color', '#0f172a');
+      document.documentElement.style.setProperty('--card-background', '#1e293b');
+      document.documentElement.style.setProperty('--text-primary', '#f1f5f9');
+      document.documentElement.style.setProperty('--text-secondary', '#cbd5e1');
+      document.documentElement.style.setProperty('--text-muted', '#64748b');
+      document.documentElement.style.setProperty('--border-color', '#334155');
+    } else {
+      localStorage.setItem('darkMode', 'light');
+    }
+  }
+}
+
+// ブラウザの設定変更を監視（ユーザーが設定していない場合のみ）
+function watchSystemTheme() {
+  const savedMode = localStorage.getItem('darkMode');
+  
+  // ユーザーが明示的に設定していない場合のみ監視
+  if (!savedMode) {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', (e) => {
+      // ユーザーがまだ設定していない場合のみ自動変更
+      if (!localStorage.getItem('darkMode')) {
+        if (e.matches) {
+          document.body.classList.add('dark-mode');
+          document.getElementById('darkModeToggle').textContent = '☀️';
+          localStorage.setItem('darkMode', 'dark');
+        } else {
+          document.body.classList.remove('dark-mode');
+          document.getElementById('darkModeToggle').textContent = '🌙';
+          localStorage.setItem('darkMode', 'light');
+        }
+        
+        // チャートの色を更新
+        if (timelineChart) {
+          updateTimelineChart();
+        }
+      }
+    });
+  }
+}
+
+// ダークモードボタンのイベントリスナーを設定
+document.addEventListener('DOMContentLoaded', () => {
+  const darkModeToggle = document.getElementById('darkModeToggle');
+  if (darkModeToggle) {
+    darkModeToggle.addEventListener('click', toggleDarkMode);
+  }
+  
+  // 初期化
+  initDarkMode();
+  
+  // システムテーマの監視を開始
+  watchSystemTheme();
+});
 </script>
 
 <script>
