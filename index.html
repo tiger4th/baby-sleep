@@ -65,6 +65,12 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
   </div>
 </div>
 
+<div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
+  <b>CSVエクスポート</b><br>
+  <button onclick="exportSleepData()">睡眠データをエクスポート</button>
+  <span id="analysisStatus" style="margin-left:8px;color:#666;"></span>
+</div>
+
 <script>
 // データ構造を日付ごとの辞書に移行（互換: 旧配列→今日の日付に移行）
 let allLogsRaw = null;
@@ -140,6 +146,8 @@ function setCurrentDateKey(newKey) {
   updateTimelineChart();
   updatePrediction();
   updateViewDateStatus();
+  // 予測精度統計を更新
+  showPredictionStats();
 }
 
 function keyFromInputValue(value) { // YYYY-MM-DD -> YYYY/MM/DD
@@ -197,6 +205,8 @@ function addLogAt(type, time) {
   renderLogs();
   updateTimelineChart();
   updatePrediction();
+  // 予測精度統計を更新
+  showPredictionStats();
 }
 
 function startEditLog(index) {
@@ -228,6 +238,8 @@ function handleAddOrUpdate() {
     renderLogs();
     updateTimelineChart();
     updatePrediction();
+    // 予測精度統計を更新
+    showPredictionStats();
     cancelEdit();
   }
 }
@@ -254,6 +266,8 @@ function deleteLog(index) {
   renderLogs();
   updateTimelineChart();
   updatePrediction();
+  // 予測精度統計を更新
+  showPredictionStats();
   cancelEdit();
 }
 
@@ -264,9 +278,11 @@ function renderLogs() {
   const header = "<b>記録</b><br>";
 
   if (total <= recentCount) {
-    const allHtml = logs.map((l, i) => `${l.time} - ${translateType(l.type)} ` +
-      `<button onclick="startEditLog(${i})">編集</button> ` +
-      `<button onclick="deleteLog(${i})">削除</button>`).join("<br>");
+    const allHtml = logs.map((l, i) => {
+      return `${l.time} - ${translateType(l.type)} ` +
+        `<button onclick="startEditLog(${i})">編集</button> ` +
+        `<button onclick="deleteLog(${i})">削除</button>`;
+    }).join("<br>");
     container.innerHTML = header + allHtml;
     return;
   }
@@ -427,20 +443,49 @@ function updatePrediction() {
   const birthDate = loadBirth();
   const monthsAge = birthDate ? calculateMonthsAge(birthDate, new Date()) : null;
 
+  // 過去データベースの予測を取得
+  const historicalPrediction = getHistoricalPrediction(wakeTime, monthsAge);
+  
+  // 月齢ベースの基本予測
   const [awakeMin, awakeMax] = getAwakeWindowByMonths(monthsAge);
-  const awakeMinutes = randomIntInclusive(awakeMin, awakeMax);
-  const nextNapStart = new Date(wakeTime.getTime() + awakeMinutes * 60000);
+  const basicAwakeMinutes = randomIntInclusive(awakeMin, awakeMax);
+  const basicNextNapStart = new Date(wakeTime.getTime() + basicAwakeMinutes * 60000);
+  const basicNapLengthMinutes = getNapLengthByMonths(monthsAge, basicNextNapStart);
 
-  const napLengthMinutes = getNapLengthByMonths(monthsAge, nextNapStart);
-  const wakeUpTime = new Date(nextNapStart.getTime() + napLengthMinutes * 60000);
+  // 過去データと基本予測を組み合わせた最終予測
+  let finalAwakeMinutes, finalNapLengthMinutes;
+  if (historicalPrediction) {
+    // 過去データがある場合は、基本予測と過去データを重み付けで組み合わせ
+    const historicalWeight = 0.7; // 過去データの重み
+    const basicWeight = 0.3; // 基本予測の重み
+    
+    finalAwakeMinutes = Math.round(
+      historicalPrediction.avgAwakeTime * historicalWeight + 
+      basicAwakeMinutes * basicWeight
+    );
+    finalNapLengthMinutes = Math.round(
+      historicalPrediction.avgNapLength * historicalWeight + 
+      basicNapLengthMinutes * basicWeight
+    );
+  } else {
+    // 過去データがない場合は基本予測を使用
+    finalAwakeMinutes = basicAwakeMinutes;
+    finalNapLengthMinutes = basicNapLengthMinutes;
+  }
+
+  const nextNapStart = new Date(wakeTime.getTime() + finalAwakeMinutes * 60000);
+  const wakeUpTime = new Date(nextNapStart.getTime() + finalNapLengthMinutes * 60000);
 
   const monthsInfo = monthsAge !== null ? `（月齢: ${monthsAge}ヶ月）` : "";
+  const historicalInfo = historicalPrediction ? 
+    `<br><small style="color:#666;">過去データベース: 起きてる時間 ${Math.round(historicalPrediction.avgAwakeTime)}分、睡眠時間 ${Math.round(historicalPrediction.avgNapLength)}分</small>` : "";
 
   document.getElementById("prediction").innerHTML =
     `<b>次の寝かしつけ目安</b>${monthsInfo}<br>
      ${formatTime(nextNapStart)}ごろベッドに<br>
      <b>入眠予測</b> ${formatTime(new Date(nextNapStart.getTime() + 5*60000))}<br>
-     <b>起床予測</b> ${formatTime(wakeUpTime)}`;
+     <b>起床予測</b> ${formatTime(wakeUpTime)}
+     ${historicalInfo}`;
 }
 
 function formatTime(date) {
@@ -717,11 +762,313 @@ function parsePiyologTextMulti(text) {
   return dateToItems;
 }
 
+// 過去データベースの予測を取得する関数
+function getHistoricalPrediction(currentWakeTime, monthsAge) {
+  const allDates = Object.keys(allLogs).sort();
+  if (allDates.length < 3) return null; // 最低3日分のデータが必要
+
+  const currentDate = new Date();
+  const currentHour = currentWakeTime.getHours();
+  
+  // 過去30日分のデータを分析
+  const analysisDays = 30;
+  const recentDates = allDates.slice(-analysisDays);
+  
+  let totalAwakeTime = 0;
+  let totalNapLength = 0;
+  let validPatterns = 0;
+
+  for (const dateKey of recentDates) {
+    const dayLogs = allLogs[dateKey] || [];
+    if (dayLogs.length < 2) continue;
+
+    // その日の睡眠パターンを分析
+    const patterns = analyzeDayPattern(dayLogs, dateKey);
+    if (patterns.length === 0) continue;
+
+    // 現在時刻に近い時間帯のパターンを探す
+    for (const pattern of patterns) {
+      if (pattern.wakeHour >= currentHour - 2 && pattern.wakeHour <= currentHour + 2) {
+        totalAwakeTime += pattern.awakeTime;
+        totalNapLength += pattern.napLength;
+        validPatterns++;
+      }
+    }
+  }
+
+  if (validPatterns < 2) return null; // 最低2パターンのデータが必要
+
+  return {
+    avgAwakeTime: totalAwakeTime / validPatterns,
+    avgNapLength: totalNapLength / validPatterns,
+    dataPoints: validPatterns
+  };
+}
+
+// 1日の睡眠パターンを分析する関数
+function analyzeDayPattern(dayLogs, dateKey) {
+  const patterns = [];
+  const sortedLogs = dayLogs
+    .filter(l => l.type === 'wake' || l.type === 'nap')
+    .sort((a, b) => getSortKey(a.time) - getSortKey(b.time));
+
+  for (let i = 0; i < sortedLogs.length - 1; i++) {
+    const current = sortedLogs[i];
+    const next = sortedLogs[i + 1];
+    
+    if (current.type === 'wake' && next.type === 'nap') {
+      // 起床→睡眠のパターン
+      const [wakeHour, wakeMin] = current.time.split(':').map(Number);
+      const [napHour, napMin] = next.time.split(':').map(Number);
+      
+      // 起きてる時間を計算
+      let awakeTime = (napHour * 60 + napMin) - (wakeHour * 60 + wakeMin);
+      if (awakeTime < 0) awakeTime += 24 * 60; // 日をまたぐ場合
+      
+      // 睡眠時間を計算（次の起床まで）
+      let napLength = 0;
+      if (i + 2 < sortedLogs.length && sortedLogs[i + 2].type === 'wake') {
+        const nextWake = sortedLogs[i + 2];
+        const [nextWakeHour, nextWakeMin] = nextWake.time.split(':').map(Number);
+        napLength = (nextWakeHour * 60 + nextWakeMin) - (napHour * 60 + napMin);
+        if (napLength < 0) napLength += 24 * 60;
+      } else {
+        // 次の起床がない場合は推定
+        napLength = getNapLengthByMonths(null, new Date());
+      }
+
+      patterns.push({
+        wakeHour: wakeHour,
+        awakeTime: awakeTime,
+        napLength: napLength,
+        date: dateKey
+      });
+    }
+  }
+
+  return patterns;
+}
+
+// 予測精度の評価と統計情報を表示する関数
+function showPredictionStats() {
+  const allDates = Object.keys(allLogs).sort();
+  let statsHtml = '';
+  
+  if (allDates.length < 3) {
+    statsHtml = `
+      <div style="background:white; padding:15px; border-radius:6px; margin-top:10px;">
+        <h3>予測精度統計</h3>
+        <div style="color:#666; text-align:center; padding:20px;">
+          統計分析には最低3日分のデータが必要です<br>
+          <small>現在の記録: ${allDates.length}日分</small>
+        </div>
+      </div>
+    `;
+  } else {
+    const stats = calculatePredictionStats();
+    statsHtml = `
+      <div style="background:white; padding:15px; border-radius:6px; margin-top:10px;">
+        <h3>予測精度統計</h3>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+          <div>
+            <b>データ期間</b><br>
+            ${stats.startDate} 〜 ${stats.endDate}<br>
+            <small>（${stats.totalDays}日間）</small>
+          </div>
+          <div>
+            <b>記録総数</b><br>
+            ${stats.totalLogs}件<br>
+            <small>（1日平均 ${Math.round(stats.avgLogsPerDay)}件）</small>
+          </div>
+          <div>
+            <b>平均起きてる時間</b><br>
+            ${Math.round(stats.avgAwakeTime)}分<br>
+            <small>（標準偏差: ±${Math.round(stats.stdAwakeTime)}分）</small>
+          </div>
+          <div>
+            <b>平均睡眠時間</b><br>
+            ${Math.round(stats.avgNapLength)}分<br>
+            <small>（標準偏差: ±${Math.round(stats.stdNapLength)}分）</small>
+          </div>
+        </div>
+        <div style="margin-top:15px; padding:10px; background:#f0f0f0; border-radius:4px;">
+          <b>睡眠パターンの傾向</b><br>
+          ${stats.patternTrend}
+        </div>
+      </div>
+    `;
+  }
+
+  // 既存の統計表示があれば更新、なければ追加
+  const existingStats = document.getElementById('predictionStats');
+  if (existingStats) {
+    existingStats.innerHTML = statsHtml;
+  } else {
+    const container = document.createElement('div');
+    container.id = 'predictionStats';
+    container.innerHTML = statsHtml;
+    document.getElementById('prediction').after(container);
+  }
+}
+
+// 予測統計を計算する関数
+function calculatePredictionStats() {
+  const allDates = Object.keys(allLogs).sort();
+  const startDate = allDates[0];
+  const endDate = allDates[allDates.length - 1];
+  const totalDays = allDates.length;
+  
+  let totalLogs = 0;
+  let totalAwakeTime = 0;
+  let totalNapLength = 0;
+  let awakeTimes = [];
+  let napLengths = [];
+  let validPatterns = 0;
+
+  for (const dateKey of allDates) {
+    const dayLogs = allLogs[dateKey] || [];
+    totalLogs += dayLogs.length;
+    
+    const patterns = analyzeDayPattern(dayLogs, dateKey);
+    for (const pattern of patterns) {
+      awakeTimes.push(pattern.awakeTime);
+      napLengths.push(pattern.napLength);
+      totalAwakeTime += pattern.awakeTime;
+      totalNapLength += pattern.napLength;
+      validPatterns++;
+    }
+  }
+
+  const avgAwakeTime = validPatterns > 0 ? totalAwakeTime / validPatterns : 0;
+  const avgNapLength = validPatterns > 0 ? totalNapLength / validPatterns : 0;
+  
+  const stdAwakeTime = calculateStandardDeviation(awakeTimes, avgAwakeTime);
+  const stdNapLength = calculateStandardDeviation(napLengths, avgNapLength);
+
+  // 睡眠パターンの傾向を分析
+  const patternTrend = analyzePatternTrend(awakeTimes, napLengths);
+
+  return {
+    startDate,
+    endDate,
+    totalDays,
+    totalLogs,
+    avgLogsPerDay: totalLogs / totalDays,
+    avgAwakeTime,
+    avgNapLength,
+    stdAwakeTime,
+    stdNapLength,
+    patternTrend
+  };
+}
+
+// 標準偏差を計算する関数
+function calculateStandardDeviation(values, mean) {
+  if (values.length < 2) return 0;
+  const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
+  const avgSquaredDiff = squaredDiffs.reduce((sum, val) => sum + val, 0) / values.length;
+  return Math.sqrt(avgSquaredDiff);
+}
+
+// 睡眠パターンの傾向を分析する関数
+function analyzePatternTrend(awakeTimes, napLengths) {
+  if (awakeTimes.length < 3) return 'データ不足のため傾向を分析できません';
+
+  // 時系列での変化を分析
+  const recentAwake = awakeTimes.slice(-Math.floor(awakeTimes.length / 3));
+  const earlyAwake = awakeTimes.slice(0, Math.floor(awakeTimes.length / 3));
+  
+  const recentAvg = recentAwake.reduce((sum, val) => sum + val, 0) / recentAwake.length;
+  const earlyAvg = earlyAwake.reduce((sum, val) => sum + val, 0) / earlyAwake.length;
+  
+  let trend = '';
+  if (recentAvg > earlyAvg + 30) {
+    trend = '起きてる時間が徐々に長くなっています';
+  } else if (recentAvg < earlyAvg - 30) {
+    trend = '起きてる時間が徐々に短くなっています';
+  } else {
+    trend = '起きてる時間は安定しています';
+  }
+
+  // 睡眠時間の一貫性
+  const napStd = calculateStandardDeviation(napLengths, napLengths.reduce((sum, val) => sum + val, 0) / napLengths.length);
+  if (napStd < 30) {
+    trend += '、睡眠時間は一貫しています';
+  } else if (napStd > 60) {
+    trend += '、睡眠時間にばらつきがあります';
+  } else {
+    trend += '、睡眠時間はややばらつきがあります';
+  }
+
+  return trend;
+}
+
+// 睡眠データをエクスポートする関数
+function exportSleepData() {
+  const allDates = Object.keys(allLogs).sort();
+  if (allDates.length === 0) {
+    alert('エクスポートするデータがありません');
+    return;
+  }
+
+  let csvContent = '日付,時刻,タイプ\n';
+  
+  for (const dateKey of allDates) {
+    const dayLogs = allLogs[dateKey] || [];
+    for (const log of dayLogs) {
+      const date = dateKey.replace(/\//g, '-');
+      const type = log.type === 'wake' ? '起床' : '睡眠';
+      csvContent += `${date},${log.time},${type}\n`;
+    }
+  }
+
+  // CSVファイルをダウンロード
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `baby_sleep_data_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  // ステータス更新
+  const status = document.getElementById('analysisStatus');
+  if (status) {
+    status.textContent = `エクスポート完了（${allDates.length}日分）`;
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  }
+}
+
+
+
+// 既存データからdetailsフィールドを削除（詳細記録機能削除のため）
+function cleanupDetailsField() {
+  let hasChanges = false;
+  for (const dateKey in allLogs) {
+    const dayLogs = allLogs[dateKey] || [];
+    for (const log of dayLogs) {
+      if (log.details !== undefined) {
+        delete log.details;
+        hasChanges = true;
+      }
+    }
+  }
+  if (hasChanges) {
+    saveAllLogs();
+  }
+}
+
 // 初期化
 // 表示日初期値を今日に設定し、日付入力にも反映
+cleanupDetailsField();
 setCurrentDateKey(currentDateKey);
 const viewDateEl = document.getElementById('viewDate');
 if (viewDateEl) viewDateEl.value = inputValueFromKey(currentDateKey);
+
+// 予測精度統計を自動表示
+showPredictionStats();
 
 // 時刻入力の初期値を現在時刻に設定
 const timeInputEl = document.getElementById('timeInput');
