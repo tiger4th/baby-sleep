@@ -21,7 +21,6 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
 <div>
   <button onclick="addLog('wake')">起きた</button>
   <button onclick="addLog('nap')">寝た</button>
-  <button onclick="addLog('milk')">ミルク</button>
 </div>
   
   <div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
@@ -29,7 +28,6 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
     <select id="typeSelect">
       <option value="wake">起きた</option>
       <option value="nap">寝た</option>
-      <option value="milk">ミルク</option>
     </select>
     <input id="timeInput" type="time" step="60">
     <button id="addBtn" onclick="handleAddOrUpdate()">この時間で追加</button>
@@ -54,12 +52,19 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
   <button onclick="handleImportPiyolog()">インポート</button>
   <span id="importStatus" style="margin-left:8px;color:#666;"></span>
   <div style="color:#888; font-size:0.9em; margin-top:6px;">
-    最新日の「起きる／寝る／ミルク」を取り込みます。他の項目は無視します。
+    最新日の「起きる／寝る」を取り込みます。他の項目は無視します。
   </div>
 </div>
 
 <script>
 let logs = JSON.parse(localStorage.getItem("babyLogs") || "[]");
+// 不要なタイプ（ミルク等）は読み込み時に除外
+if (Array.isArray(logs)) {
+  logs = logs.filter(l => l && (l.type === 'wake' || l.type === 'nap'));
+} else {
+  logs = [];
+}
+localStorage.setItem('babyLogs', JSON.stringify(logs));
 let timelineChart = null;
 let editingIndex = null;
 const BIRTH_KEY = "babyBirthDate"; // YYYY-MM-DD で保存
@@ -90,6 +95,10 @@ function addLog(type) {
 function addLogAt(type, time) {
   if (!time || !/^\d{2}:\d{2}$/.test(time)) {
     alert('時刻は HH:MM 形式で指定してください');
+    return;
+  }
+  if (!(type === 'wake' || type === 'nap')) {
+    alert('追加できるのは「起きた」「寝た」のみです');
     return;
   }
   logs.push({ type, time });
@@ -199,8 +208,7 @@ function renderLogs() {
 
 function translateType(type) {
   return type === "wake" ? "起きた" :
-         type === "nap" ? "寝た" :
-         type === "milk" ? "ミルク" : type;
+         type === "nap" ? "寝た" : type;
 }
 
 // 生年月日の保存・読込と月齢ベースの推定
@@ -473,7 +481,7 @@ function parsePiyologText(text) {
   const dateHeaderRegex = /^\s*(\d{4})\/(\d{1,2})\/(\d{1,2})\s*\(/;
   const timeLineRegex = /^\s*(\d{2}):(\d{2})\s+(.+)/;
 
-  /** @type {Record<string, Array<{time: string, type: 'wake'|'nap'|'milk'}>>} */
+  /** @type {Record<string, Array<{time: string, type: 'wake'|'nap'}>>} */
   const dateToItems = {};
   let currentDateKey = null;
 
@@ -498,7 +506,6 @@ function parsePiyologText(text) {
     let type = null;
     if (body.startsWith('起きる')) type = 'wake';
     else if (body.startsWith('寝る')) type = 'nap';
-    else if (body.startsWith('ミルク')) type = 'milk';
     if (type) {
       dateToItems[currentDateKey].push({ time, type });
     }
