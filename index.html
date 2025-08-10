@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ベビースリープ予測</title>
+<link rel="manifest" href="./manifest.json">
+<style>
+body { font-family: sans-serif; padding: 10px; background: #f5f5f5; }
+h1 { font-size: 1.4em; }
+button { margin: 5px; padding: 10px; font-size: 1em; }
+#log, #prediction { margin-top: 10px; background: white; padding: 10px; border-radius: 6px; }
+canvas { background: white; margin-top: 15px; border-radius: 6px; }
+</style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js?v=20250810-1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.umd.min.js?v=20250810-1"></script>
+</head>
+<body>
+
+<h1>ベビースリープ予測</h1>
+<div>
+  <button onclick="addLog('wake')">起きた</button>
+  <button onclick="addLog('nap')">寝た</button>
+  <button onclick="addLog('milk')">ミルク</button>
+</div>
+  
+  <div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
+    <b>時間指定で追加／編集</b><br>
+    <select id="typeSelect">
+      <option value="wake">起きた</option>
+      <option value="nap">寝た</option>
+      <option value="milk">ミルク</option>
+    </select>
+    <input id="timeInput" type="time" step="60">
+    <button id="addBtn" onclick="handleAddOrUpdate()">この時間で追加</button>
+    <button id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">キャンセル</button>
+    <span id="editStatus" style="margin-left:8px;color:#666;"></span>
+  </div>
+
+<div id="log"></div>
+<div id="prediction"></div>
+<canvas id="timelineChart" height="150"></canvas>
+
+<script>
+let logs = JSON.parse(localStorage.getItem("babyLogs") || "[]");
+let timelineChart = null;
+let editingIndex = null;
+
+function nowTimeString() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function getSortKey(timeStr) {
+  const [h, m] = timeStr.split(":").map(Number);
+  // 07:00を日境界にし、<07:00 は翌日扱い
+  const minutes = h * 60 + m;
+  return minutes < 7 * 60 ? minutes + 24 * 60 : minutes;
+}
+
+function sortLogs() {
+  logs.sort((a, b) => getSortKey(a.time) - getSortKey(b.time));
+}
+
+function addLog(type) {
+  const time = nowTimeString();
+  addLogAt(type, time);
+}
+
+function addLogAt(type, time) {
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+    alert('時刻は HH:MM 形式で指定してください');
+    return;
+  }
+  logs.push({ type, time });
+  sortLogs();
+  localStorage.setItem("babyLogs", JSON.stringify(logs));
+  renderLogs();
+  updateTimelineChart();
+  updatePrediction();
+}
+
+function startEditLog(index) {
+  const target = logs[index];
+  if (!target) return;
+  editingIndex = index;
+  document.getElementById('typeSelect').value = target.type;
+  document.getElementById('timeInput').value = target.time;
+  const addBtn = document.getElementById('addBtn');
+  addBtn.textContent = '更新';
+  document.getElementById('cancelEditBtn').style.display = '';
+  document.getElementById('editStatus').textContent = `編集中: ${target.time} - ${translateType(target.type)}`;
+}
+
+function handleAddOrUpdate() {
+  const type = document.getElementById('typeSelect').value;
+  const time = document.getElementById('timeInput').value;
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+    alert('時刻は HH:MM 形式で指定してください');
+    return;
+  }
+  if (editingIndex === null) {
+    addLogAt(type, time);
+  } else {
+    logs[editingIndex] = { type, time };
+    sortLogs();
+    localStorage.setItem('babyLogs', JSON.stringify(logs));
+    renderLogs();
+    updateTimelineChart();
+    updatePrediction();
+    cancelEdit();
+  }
+}
+
+function cancelEdit() {
+  editingIndex = null;
+  const addBtn = document.getElementById('addBtn');
+  addBtn.textContent = 'この時間で追加';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  document.getElementById('editStatus').textContent = '';
+  const timeInputEl = document.getElementById('timeInput');
+  if (timeInputEl) timeInputEl.value = nowTimeString();
+}
+
+function deleteLog(index) {
+  const target = logs[index];
+  if (!target) return;
+  const ok = confirm(`削除しますか？\n${target.time} - ${translateType(target.type)}`);
+  if (!ok) return;
+  logs.splice(index, 1);
+  localStorage.setItem('babyLogs', JSON.stringify(logs));
+  sortLogs();
+  renderLogs();
+  updateTimelineChart();
+  updatePrediction();
+  cancelEdit();
+}
+
+function renderLogs() {
+  document.getElementById("log").innerHTML =
+    "<b>記録</b><br>" + logs.map((l, i) => `${l.time} - ${translateType(l.type)} ` +
+      `<button onclick="startEditLog(${i})">編集</button> ` +
+      `<button onclick="deleteLog(${i})">削除</button>`
+    ).join("<br>");
+}
+
+function translateType(type) {
+  return type === "wake" ? "起きた" :
+         type === "nap" ? "寝た" :
+         type === "milk" ? "ミルク" : type;
+}
+
+function updatePrediction() {
+  if (logs.length === 0) return;
+  const lastLog = logs[logs.length - 1];
+  if (lastLog.type !== "wake") {
+    document.getElementById("prediction").innerHTML = "起床ログ後に予測が表示されます。";
+    return;
+  }
+
+  const [h, m] = lastLog.time.split(":").map(Number);
+  const wakeTime = new Date();
+  wakeTime.setHours(h, m);
+
+  // 活動時間を設定（7ヶ月は約2h〜2.5h）
+  const awakeMinutes = 120 + Math.floor(Math.random() * 30);
+  const nextNapStart = new Date(wakeTime.getTime() + awakeMinutes * 60000);
+
+  // 15時以降の昼寝は短く（30分以内）
+  let napLengthMinutes = (nextNapStart.getHours() >= 15) ? 30 : 90;
+  const wakeUpTime = new Date(nextNapStart.getTime() + napLengthMinutes * 60000);
+
+  document.getElementById("prediction").innerHTML =
+    `<b>次の寝かしつけ目安</b><br>
+     ${formatTime(nextNapStart)}ごろベッドに<br>
+     <b>入眠予測</b> ${formatTime(new Date(nextNapStart.getTime() + 5*60000))}<br>
+     <b>起床予測</b> ${formatTime(wakeUpTime)}`;
+}
+
+function formatTime(date) {
+  return date.toTimeString().slice(0,5);
+}
+
+function updateTimelineChart() {
+  const isDateAdapterReady = () => {
+    const a = Chart && Chart._adapters && Chart._adapters._date;
+    return !!(a && a.format && a.parse && a.add && a.diff && a.startOf && a.endOf && a.formats);
+  };
+  const events = [];
+  const today = new Date();
+  today.setHours(7, 0, 0, 0);
+  const todayMs = today.getTime();
+
+  for (let i = 0; i < logs.length - 1; i++) {
+    const current = logs[i];
+    const next = logs[i + 1];
+
+    const [sh, sm] = current.time.split(":").map(Number);
+    const [eh, em] = next.time.split(":").map(Number);
+
+    let startDate = new Date(today);
+    let endDate = new Date(today);
+
+    if (sh < 7) startDate.setDate(startDate.getDate() + 1);
+    startDate.setHours(sh, sm);
+
+    if (eh < 7) endDate.setDate(endDate.getDate() + 1);
+    endDate.setHours(eh, em);
+
+    const label = current.type === "nap" ? "睡眠" : "起きてる";
+    const color = current.type === "nap" ? "#4CAF50" : "#FF9800";
+
+    events.push({
+      label,
+      start: startDate,
+      end: endDate,
+      color
+    });
+  }
+
+  const ctx = document.getElementById('timelineChart').getContext('2d');
+  if (timelineChart) timelineChart.destroy();
+
+  const baseConfig = {
+    type: 'bar',
+    data: {
+      labels: ["スケジュール"],
+      datasets: events.map(ev => ({
+        label: ev.label,
+        data: [{
+          x: [ev.start.getTime(), ev.end.getTime()],
+          y: "スケジュール"
+        }],
+        backgroundColor: ev.color,
+        borderSkipped: false,
+        barPercentage: 0.8
+      }))
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      scales: { x: {} }
+    }
+  };
+
+  const timeseriesX = {
+    type: 'timeseries',
+    time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+    min: today,
+    max: new Date(todayMs + 24 * 3600000)
+  };
+  const linearX = {
+    type: 'linear',
+    min: todayMs,
+    max: todayMs + 24 * 3600000,
+    ticks: { callback: (value) => formatTime(new Date(value)) }
+  };
+
+  try {
+    baseConfig.options.scales.x = isDateAdapterReady() ? timeseriesX : linearX;
+    timelineChart = new Chart(ctx, baseConfig);
+  } catch (err) {
+    console.warn('Chart init failed, fallback to linear scale:', err);
+    baseConfig.options.scales.x = linearX;
+    timelineChart = new Chart(ctx, baseConfig);
+  }
+}
+
+// 初期化
+sortLogs();
+renderLogs();
+updateTimelineChart();
+updatePrediction();
+
+// 時刻入力の初期値を現在時刻に設定
+const timeInputEl = document.getElementById('timeInput');
+if (timeInputEl) {
+  timeInputEl.value = nowTimeString();
+}
+</script>
+
+<script>
+// PWA Service Worker登録
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>
+
+</body>
+</html>
