@@ -42,6 +42,15 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
     <span id="birthStatus" style="margin-left:8px;color:#666;"></span>
   </div>
 
+  <div style="margin-top:10px; background:white; padding:10px; border-radius:6px;">
+    <b>表示日</b><br>
+    <input id="viewDate" type="date">
+    <button onclick="goToday()">今日</button>
+    <button onclick="shiftDay(-1)">前日</button>
+    <button onclick="shiftDay(1)">翌日</button>
+    <span id="viewDateStatus" style="margin-left:8px;color:#666;"></span>
+  </div>
+
 <div id="log"></div>
 <div id="prediction"></div>
 <canvas id="timelineChart" height="150"></canvas>
@@ -57,14 +66,42 @@ canvas { background: white; margin-top: 15px; border-radius: 6px; }
 </div>
 
 <script>
-let logs = JSON.parse(localStorage.getItem("babyLogs") || "[]");
-// 不要なタイプ（ミルク等）は読み込み時に除外
-if (Array.isArray(logs)) {
-  logs = logs.filter(l => l && (l.type === 'wake' || l.type === 'nap'));
-} else {
-  logs = [];
+// データ構造を日付ごとの辞書に移行（互換: 旧配列→今日の日付に移行）
+let allLogsRaw = null;
+try {
+  allLogsRaw = JSON.parse(localStorage.getItem('babyLogs') || 'null');
+} catch (_) {
+  allLogsRaw = null;
 }
-localStorage.setItem('babyLogs', JSON.stringify(logs));
+
+function __computeTodayKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}/${m}/${day}`;
+}
+
+let allLogs = {};
+if (Array.isArray(allLogsRaw)) {
+  // 旧形式（配列）→ 今日の日付に移し替え
+  const todayKey = __computeTodayKey();
+  allLogs[todayKey] = allLogsRaw.filter(l => l && (l.type === 'wake' || l.type === 'nap'));
+} else if (allLogsRaw && typeof allLogsRaw === 'object') {
+  allLogs = allLogsRaw;
+  // 各日ごとに型フィルタを適用
+  for (const k of Object.keys(allLogs)) {
+    const arr = Array.isArray(allLogs[k]) ? allLogs[k] : [];
+    allLogs[k] = arr.filter(l => l && (l.type === 'wake' || l.type === 'nap'));
+  }
+} else {
+  const todayKey = __computeTodayKey();
+  allLogs[todayKey] = [];
+}
+localStorage.setItem('babyLogs', JSON.stringify(allLogs));
+
+let currentDateKey = __computeTodayKey();
+let logs = allLogs[currentDateKey] || [];
 let timelineChart = null;
 let editingIndex = null;
 const BIRTH_KEY = "babyBirthDate"; // YYYY-MM-DD で保存
@@ -87,6 +124,58 @@ function sortLogs() {
   logs.sort((a, b) => getSortKey(a.time) - getSortKey(b.time));
 }
 
+function saveAllLogs() {
+  localStorage.setItem('babyLogs', JSON.stringify(allLogs));
+}
+
+function setCurrentDateKey(newKey) {
+  currentDateKey = newKey;
+  if (!allLogs[currentDateKey]) allLogs[currentDateKey] = [];
+  // 型フィルタ
+  allLogs[currentDateKey] = allLogs[currentDateKey].filter(l => l && (l.type === 'wake' || l.type === 'nap'));
+  logs = allLogs[currentDateKey];
+  sortLogs();
+  saveAllLogs();
+  renderLogs();
+  updateTimelineChart();
+  updatePrediction();
+  updateViewDateStatus();
+}
+
+function keyFromInputValue(value) { // YYYY-MM-DD -> YYYY/MM/DD
+  if (!value) return null;
+  const [y, m, d] = value.split('-');
+  return `${y}/${m}/${d}`;
+}
+
+function inputValueFromKey(key) { // YYYY/MM/DD -> YYYY-MM-DD
+  if (!key) return '';
+  const [y, m, d] = key.split('/');
+  return `${y}-${m}-${d}`;
+}
+
+function goToday() {
+  setCurrentDateKey(__computeTodayKey());
+  const viewDateEl = document.getElementById('viewDate');
+  if (viewDateEl) viewDateEl.value = inputValueFromKey(currentDateKey);
+}
+
+function shiftDay(delta) {
+  const [y, m, d] = currentDateKey.split('/').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + delta);
+  const key = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}`;
+  setCurrentDateKey(key);
+  const viewDateEl = document.getElementById('viewDate');
+  if (viewDateEl) viewDateEl.value = inputValueFromKey(currentDateKey);
+}
+
+function updateViewDateStatus() {
+  const status = document.getElementById('viewDateStatus');
+  if (!status) return;
+  status.textContent = `表示中: ${currentDateKey}（${logs.length}件）`;
+}
+
 function addLog(type) {
   const time = nowTimeString();
   addLogAt(type, time);
@@ -103,7 +192,8 @@ function addLogAt(type, time) {
   }
   logs.push({ type, time });
   sortLogs();
-  localStorage.setItem("babyLogs", JSON.stringify(logs));
+  allLogs[currentDateKey] = logs;
+  saveAllLogs();
   renderLogs();
   updateTimelineChart();
   updatePrediction();
@@ -133,7 +223,8 @@ function handleAddOrUpdate() {
   } else {
     logs[editingIndex] = { type, time };
     sortLogs();
-    localStorage.setItem('babyLogs', JSON.stringify(logs));
+    allLogs[currentDateKey] = logs;
+    saveAllLogs();
     renderLogs();
     updateTimelineChart();
     updatePrediction();
@@ -157,7 +248,8 @@ function deleteLog(index) {
   const ok = confirm(`削除しますか？\n${target.time} - ${translateType(target.type)}`);
   if (!ok) return;
   logs.splice(index, 1);
-  localStorage.setItem('babyLogs', JSON.stringify(logs));
+  allLogs[currentDateKey] = logs;
+  saveAllLogs();
   sortLogs();
   renderLogs();
   updateTimelineChart();
@@ -309,19 +401,22 @@ function randomIntInclusive(min, max) {
 }
 
 function updatePrediction() {
-  if (logs.length === 0) return;
+  if (logs.length === 0) {
+    document.getElementById("prediction").innerHTML = "この日の起床ログ後に予測が表示されます。";
+    return;
+  }
   // 直近の「状態」ログ（wake/nap）のみを見る。
   const lastStateIndex = [...logs].map((l, i) => ({...l, i}))
     .filter(l => l.type === 'wake' || l.type === 'nap')
     .map(l => l.i)
     .pop();
   if (lastStateIndex === undefined) {
-    document.getElementById("prediction").innerHTML = "起床ログ後に予測が表示されます。";
+    document.getElementById("prediction").innerHTML = "この日の起床ログ後に予測が表示されます。";
     return;
   }
   const lastState = logs[lastStateIndex];
   if (lastState.type !== 'wake') {
-    document.getElementById("prediction").innerHTML = "起床ログ後に予測が表示されます。";
+    document.getElementById("prediction").innerHTML = "この日の起床ログ後に予測が表示されます。";
     return;
   }
 
@@ -358,9 +453,10 @@ function updateTimelineChart() {
     return !!(a && a.format && a.parse && a.add && a.diff && a.startOf && a.endOf && a.formats);
   };
   const events = [];
-  const today = new Date();
-  today.setHours(7, 0, 0, 0);
-  const todayMs = today.getTime();
+  // 表示日の 07:00 を軸にする
+  const [y, m, d] = currentDateKey.split('/').map(Number);
+  const dayStart = new Date(y, m - 1, d, 7, 0, 0, 0);
+  const dayStartMs = dayStart.getTime();
 
   // 「状態」ログ（wake/nap）のみで区間を作成。ミルク等は無視。
   const stateLogs = logs.filter(l => l.type === 'wake' || l.type === 'nap');
@@ -371,8 +467,8 @@ function updateTimelineChart() {
     const [sh, sm] = current.time.split(":").map(Number);
     const [eh, em] = next.time.split(":").map(Number);
 
-    let startDate = new Date(today);
-    let endDate = new Date(today);
+    let startDate = new Date(dayStart);
+    let endDate = new Date(dayStart);
 
     if (sh < 7) startDate.setDate(startDate.getDate() + 1);
     startDate.setHours(sh, sm);
@@ -419,13 +515,13 @@ function updateTimelineChart() {
   const timeseriesX = {
     type: 'timeseries',
     time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
-    min: today,
-    max: new Date(todayMs + 24 * 3600000)
+    min: dayStart,
+    max: new Date(dayStartMs + 24 * 3600000)
   };
   const linearX = {
     type: 'linear',
-    min: todayMs,
-    max: todayMs + 24 * 3600000,
+    min: dayStartMs,
+    max: dayStartMs + 24 * 3600000,
     ticks: { callback: (value) => formatTime(new Date(value)) }
   };
 
@@ -457,10 +553,12 @@ function handleImportPiyolog() {
         status.textContent = '取り込める記録が見つかりませんでした';
         return;
       }
-      // 上書きインポート（最新日のみ）
-      logs = parsed.items;
+      // 取り込み: 最新日を現在の表示日に設定し、その日のログを上書き
+      setCurrentDateKey(parsed.dateKey);
+      allLogs[parsed.dateKey] = parsed.items.filter(l => l && (l.type === 'wake' || l.type === 'nap'));
+      logs = allLogs[parsed.dateKey];
       sortLogs();
-      localStorage.setItem('babyLogs', JSON.stringify(logs));
+      saveAllLogs();
       renderLogs();
       updateTimelineChart();
       updatePrediction();
@@ -527,10 +625,10 @@ function parseDateKey(key) {
 }
 
 // 初期化
-sortLogs();
-renderLogs();
-updateTimelineChart();
-updatePrediction();
+// 表示日初期値を今日に設定し、日付入力にも反映
+setCurrentDateKey(currentDateKey);
+const viewDateEl = document.getElementById('viewDate');
+if (viewDateEl) viewDateEl.value = inputValueFromKey(currentDateKey);
 
 // 時刻入力の初期値を現在時刻に設定
 const timeInputEl = document.getElementById('timeInput');
@@ -552,6 +650,17 @@ if (birthInputEl) {
   birthInputEl.addEventListener('change', () => {
     // 入力変更で即保存
     saveBirth(false);
+  });
+}
+
+// 表示日の date 入力変更で切替
+const viewDateEl2 = document.getElementById('viewDate');
+if (viewDateEl2) {
+  viewDateEl2.addEventListener('change', (e) => {
+    const v = e.target.value; // YYYY-MM-DD
+    if (!v) return;
+    const key = v.replace(/-/g, '/');
+    setCurrentDateKey(key);
   });
 }
 </script>
