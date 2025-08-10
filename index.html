@@ -457,6 +457,7 @@ function updateTimelineChart() {
   const [y, m, d] = currentDateKey.split('/').map(Number);
   const dayStart = new Date(y, m - 1, d, 7, 0, 0, 0);
   const dayStartMs = dayStart.getTime();
+  let axisMaxMs = dayStartMs + 24 * 3600000;
 
   // 「状態」ログ（wake/nap）のみで区間を作成。ミルク等は無視。
   const stateLogs = logs.filter(l => l.type === 'wake' || l.type === 'nap');
@@ -479,12 +480,62 @@ function updateTimelineChart() {
     const label = current.type === "nap" ? "睡眠" : "起きてる";
     const color = current.type === "nap" ? "#4CAF50" : "#FF9800";
 
-    events.push({
+    const ev = {
       label,
       start: startDate,
       end: endDate,
       color
-    });
+    };
+    events.push(ev);
+    const endMs = endDate.getTime();
+    if (endMs > axisMaxMs) axisMaxMs = endMs;
+  }
+
+  // 先頭の持ち越し睡眠（前日が「寝た」で終わっている場合、7:00〜当日最初の起床まで睡眠帯を追加）
+  if (stateLogs.length > 0) {
+    const dtPrev = new Date(y, m - 1, d);
+    dtPrev.setDate(dtPrev.getDate() - 1);
+    const prevKey = `${dtPrev.getFullYear()}/${String(dtPrev.getMonth() + 1).padStart(2,'0')}/${String(dtPrev.getDate()).padStart(2,'0')}`;
+    const prevStateLogs = (allLogs[prevKey] || []).filter(l => l.type === 'wake' || l.type === 'nap').sort((a,b)=>getSortKey(a.time)-getSortKey(b.time));
+    if (prevStateLogs.length > 0 && prevStateLogs[prevStateLogs.length - 1].type === 'nap') {
+      // 当日の最初の wake を探す（7:00以降の起床）
+      const firstWake = stateLogs.find(l => l.type === 'wake' && parseInt(l.time.split(':')[0],10) >= 7);
+      if (firstWake) {
+        const [eh, em] = firstWake.time.split(':').map(Number);
+        const startDate = new Date(dayStart);
+        const endDate = new Date(dayStart);
+        endDate.setHours(eh, em);
+        const ev = { label: '睡眠', start: startDate, end: endDate, color: '#4CAF50' };
+        events.push(ev);
+        const endMs = endDate.getTime();
+        if (endMs > axisMaxMs) axisMaxMs = endMs;
+      }
+    }
+  }
+
+  // 追加: 最後が「寝た」で終わっている場合、翌日の最初の「起きた」までを睡眠として表示
+  if (stateLogs.length > 0 && stateLogs[stateLogs.length - 1].type === 'nap') {
+    const lastNap = stateLogs[stateLogs.length - 1];
+    // 翌日キー
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + 1);
+    const nextKey = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+    const nextStateLogs = (allLogs[nextKey] || []).filter(l => l.type === 'wake' || l.type === 'nap');
+    nextStateLogs.sort((a, b) => getSortKey(a.time) - getSortKey(b.time));
+    const firstWake = nextStateLogs.find(l => l.type === 'wake');
+    if (firstWake) {
+      const [sh, sm] = lastNap.time.split(':').map(Number);
+      const [eh, em] = firstWake.time.split(':').map(Number);
+      let startDate = new Date(dayStart);
+      if (sh < 7) startDate.setDate(startDate.getDate() + 1);
+      startDate.setHours(sh, sm);
+      let endDate = new Date(dayStartMs + 24 * 3600000); // 翌日基準
+      endDate.setHours(eh, em);
+      const ev = { label: '睡眠', start: startDate, end: endDate, color: '#4CAF50' };
+      events.push(ev);
+      const endMs = endDate.getTime();
+      if (endMs > axisMaxMs) axisMaxMs = endMs;
+    }
   }
 
   const ctx = document.getElementById('timelineChart').getContext('2d');
@@ -516,12 +567,12 @@ function updateTimelineChart() {
     type: 'timeseries',
     time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
     min: dayStart,
-    max: new Date(dayStartMs + 24 * 3600000)
+    max: new Date(axisMaxMs)
   };
   const linearX = {
     type: 'linear',
     min: dayStartMs,
-    max: dayStartMs + 24 * 3600000,
+    max: axisMaxMs,
     ticks: { callback: (value) => formatTime(new Date(value)) }
   };
 
