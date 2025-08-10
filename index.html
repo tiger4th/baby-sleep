@@ -541,24 +541,42 @@ function updateTimelineChart() {
   const ctx = document.getElementById('timelineChart').getContext('2d');
   if (timelineChart) timelineChart.destroy();
 
+  const awakeData = events
+    .filter(ev => ev.label === '起きてる')
+    .map(ev => ({ x: [ev.start.getTime(), ev.end.getTime()], y: 'スケジュール' }));
+  const sleepData = events
+    .filter(ev => ev.label === '睡眠')
+    .map(ev => ({ x: [ev.start.getTime(), ev.end.getTime()], y: 'スケジュール' }));
+
   const baseConfig = {
     type: 'bar',
     data: {
       labels: ["スケジュール"],
-      datasets: events.map(ev => ({
-        label: ev.label,
-        data: [{
-          x: [ev.start.getTime(), ev.end.getTime()],
-          y: "スケジュール"
-        }],
-        backgroundColor: ev.color,
-        borderSkipped: false,
-        barPercentage: 0.8
-      }))
+      datasets: [
+        {
+          label: '起床中',
+          data: awakeData,
+          backgroundColor: '#FF9800',
+          borderSkipped: false,
+          barPercentage: 0.9,
+          categoryPercentage: 1.0,
+          grouped: false
+        },
+        {
+          label: '睡眠中',
+          data: sleepData,
+          backgroundColor: '#4CAF50',
+          borderSkipped: false,
+          barPercentage: 0.9,
+          categoryPercentage: 1.0,
+          grouped: false
+        }
+      ]
     },
     options: {
       indexAxis: 'y',
       responsive: true,
+      plugins: { legend: { display: true } },
       scales: { x: {} }
     }
   };
